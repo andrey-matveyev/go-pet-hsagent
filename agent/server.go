@@ -18,6 +18,7 @@ type server struct {
 	lastStat    string
 	cpuAlerted  bool
 	diskAlerted map[string]bool
+	isRunning   bool
 }
 
 // gRPC Метод: Получение системного статуса
