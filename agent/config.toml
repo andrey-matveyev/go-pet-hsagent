@@ -8,7 +8,8 @@ uuid = "74978d88-ddf2-4773-8907-7deb641f32b8"
 source_dir = "/mnt/storage"
 mount_point = "/mnt/backup"
 xhci_pci = "0000:00:14.0"
-schedule_weekday = "Sunday"
+# schedule_weekday = "Sunday"
+schedule_weekday = "Monday"
 schedule_time = "05:00"
 
 [monitoring]
