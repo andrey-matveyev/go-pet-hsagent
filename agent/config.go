@@ -1,6 +1,6 @@
 package main
 
-type Config struct {
+type config struct {
 	ListenAddress string `toml:"listen_address"`
 	Backup        struct {
 		UUID            string `toml:"uuid"`

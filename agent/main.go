@@ -27,7 +27,7 @@ func main() {
 		os.Exit(0)
 	}
 
-	var cfg Config
+	var cfg config
 	// Ищем config.toml в текущей рабочей папке, откуда запускают бинарник
 	if _, err := toml.DecodeFile("config.toml", &cfg); err != nil {
 		log.Fatalf("❌ Критическая ошибка: не удалось прочитать config.toml: %v", err)
