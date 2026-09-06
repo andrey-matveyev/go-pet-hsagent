@@ -4,9 +4,21 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"sync"
 
 	pb "go-pet-hsagent/proto"
 )
+
+type server struct {
+	pb.UnimplementedMonitorServiceServer
+	cfg         *Config
+	eventChan   chan *pb.EventNotification
+	mu          sync.Mutex
+	lastCap     int
+	lastStat    string
+	cpuAlerted  bool
+	diskAlerted map[string]bool
+}
 
 // gRPC Метод: Получение системного статуса
 func (s *server) GetBatteryStatus(ctx context.Context, in *pb.Empty) (*pb.SystemStatusResponse, error) {

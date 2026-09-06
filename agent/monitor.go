@@ -5,23 +5,11 @@ import (
 	"io/ioutil"
 	"strconv"
 	"strings"
-	"sync"
 	"syscall"
 	"time"
 
 	pb "go-pet-hsagent/proto"
 )
-
-type server struct {
-	pb.UnimplementedMonitorServiceServer
-	cfg         *Config
-	eventChan   chan *pb.EventNotification
-	mu          sync.Mutex
-	lastCap     int
-	lastStat    string
-	cpuAlerted  bool
-	diskAlerted map[string]bool
-}
 
 func getBatteryInfo() (int, string, error) {
 	capRaw, err := ioutil.ReadFile("/sys/class/power_supply/BAT0/capacity")
