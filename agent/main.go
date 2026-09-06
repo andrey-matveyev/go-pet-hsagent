@@ -1,8 +1,10 @@
 package main
 
 import (
+	"fmt"
 	"log"
 	"net"
+	"os"
 	"time"
 
 	pb "go-pet-hsagent/proto"
@@ -12,7 +14,19 @@ import (
 	"google.golang.org/grpc/keepalive"
 )
 
+var (
+	version   = "v1.0.0"  // Переопределяется через -ldflags
+	gitCommit = "unknown" // Переопределяется через -ldflags
+	buildDate = "unknown" // Переопределяется через -ldflags
+)
+
 func main() {
+	// Поддержка аргумента --version / -v
+	if len(os.Args) > 1 && (os.Args[1] == "--version" || os.Args[1] == "-v") {
+		fmt.Printf("hsagent version: %s (commit: %s, built at: %s)\n", version, gitCommit, buildDate)
+		os.Exit(0)
+	}
+
 	var cfg Config
 	// Ищем config.toml в текущей рабочей папке, откуда запускают бинарник
 	if _, err := toml.DecodeFile("config.toml", &cfg); err != nil {
