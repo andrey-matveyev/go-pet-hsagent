@@ -11,7 +11,7 @@ import (
 
 type server struct {
 	pb.UnimplementedMonitorServiceServer
-	cfg         *Config
+	cfg         *config
 	eventChan   chan *pb.EventNotification
 	mu          sync.Mutex
 	lastCap     int
