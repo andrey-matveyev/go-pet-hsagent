@@ -1,0 +1,20 @@
+# listen_address = "127.0.0.1:50051"
+listen_address = "0.0.0.0:50051"
+
+[backup]
+uuid = "74978d88-ddf2-4773-8907-7deb641f32b8"
+# source_dir = "/tmp"
+# mount_point = "/tmp"
+source_dir = "/mnt/storage"
+mount_point = "/mnt/backup"
+xhci_pci = "0000:00:14.0"
+schedule_weekday = "Sunday"
+schedule_time = "05:00"
+
+[monitoring]
+battery_interval_min = 5
+cpu_interval_min = 5
+disk_interval_min = 60
+
+cpu_temp_threshold = 85.0
+disk_min_free_percent = 10.0

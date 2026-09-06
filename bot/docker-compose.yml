@@ -1,0 +1,29 @@
+version: '3.8'
+
+services:
+  hsagent-bot:
+    image: hsagent-bot:latest
+    container_name: hs_bot_container
+    restart: unless-stopped
+    # Используем сеть хоста, чтобы бот видел gRPC Агента на 127.0.0.1:50051
+    network_mode: "host" 
+    environment:
+      - TG_TOKEN=${TG_TOKEN}
+      - TG_CHAT_ID=${TG_CHAT_ID}
+    # Настройки отображения в интерфейсе CasaOS
+    x-casaos:
+      architectures:
+        - amd64
+      main: hsagent-bot
+      description:
+        en_us: Telegram Bot for HP 4740s home server internal monitoring and backup control.
+      icon: https://flaticon.com
+      title:
+        en_us: Server Monitor Bot
+      developer: Andrey
+
+# Мета-данные для интеграции в магазин приложений CasaOS
+x-casaos:
+  nickname: Server Monitor Bot
+  author: Andrey
+  icon: /charging-station.png

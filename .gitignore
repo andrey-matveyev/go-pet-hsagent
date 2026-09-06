@@ -1,0 +1,73 @@
+# ==============================================================================
+# ШАБЛОН .gitignore ДЛЯ БЭКЕНД-РАЗРАБОТКИ
+# Блокирует отправку секретов, конфигураций и инфраструктурных данных 
+# в облако ИИ (Cline) или GitHub
+# ==============================================================================
+
+# --- Бинарники ---
+agent_bin
+
+# --- Секреты и переменные окружения ---
+.env
+.env.*
+config/secrets.json
+**/private_keys/*
+!.env.example
+!.env.template
+*.env
+config/secrets/
+**/secrets/*
+**/*secret*.*
+credentials*.json
+*.pem
+*.key
+*.pub
+*.p12
+*.pfx
+
+# --- Конфигурации и облачные доступы ---
+.aws/
+.kube/
+.gcp/
+.docker/config.json
+**/config/local.*
+**/config/dev.*
+config/production.*
+
+# --- Логи, трассировка и мониторинг ---
+*.log
+**/logs/
+**/*.log
+*.crash
+*.dump
+prometheus/data/
+grafana/data/
+
+# --- Локальные базы данных и кэш (Docker / Local) ---
+**/pgdata/
+**/postgres_data/
+**/mysql_data/
+**/redis_data/
+**/*.db
+**/*.sqlite
+**/*.sqlite3
+
+# --- Токены инструментов и специфические конфиги разработки ---
+.clinerules
+.clinehistory
+.cursorrules
+.copilotignore
+.github/workflows/*secret*
+
+
+# --- Сгенерированные файлы gRPC / Protocol Buffers ---
+proto/*.pb.go
+**/*.pb.go
+
+full_project.txt
+.dev
+*.bak
+*.swp
+*~
+.DS_Store
+Thumbs.db

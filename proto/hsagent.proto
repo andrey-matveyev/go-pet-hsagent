@@ -1,0 +1,29 @@
+syntax = "proto3";
+
+package hsagent;
+
+option go_package = "./proto;hsagent";
+
+service MonitorService {
+  rpc GetBatteryStatus(Empty) returns (SystemStatusResponse);
+  rpc StreamEvents(Empty) returns (stream EventNotification);
+  rpc TestSystems(Empty) returns (TestResponse);
+}
+
+message Empty {}
+
+message SystemStatusResponse {
+  int32 battery_capacity = 1;
+  string battery_status = 2;
+  double cpu_temperature = 3;
+  string disk_usage_info = 4;
+}
+
+message TestResponse {
+  string result_message = 1;
+}
+
+message EventNotification {
+  string type = 1;
+  string message = 2;
+}

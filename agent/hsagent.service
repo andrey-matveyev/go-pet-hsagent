@@ -1,0 +1,14 @@
+ini[Unit]
+Description=Home Monitor Local Agent (gRPC)
+After=network.target
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/root/homemonitor
+ExecStart=/root/homemonitor/agent_bin
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target
