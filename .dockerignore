@@ -1,3 +1,22 @@
+# !!!ВАЖНО!!!
+# Текущая сборка контейнера не поддерживает правила исключения с восклицательным знаком !
+# Например,
+#   *.txt
+#   !important.txt
+# Если очень нужно, то необходимо закомментировать вывод докер-контента в build_bot_docker.sh:
+# echo "Docker-context:"
+# rsync -rcvn \
+#   --exclude-from='.dockerignore' \
+#   --exclude='.git' \
+#   . /tmp/dummy | \
+#   sed -e '1,2d' \
+#       -e '/^$/d' \
+#       -e '/building file list/d' \
+#       -e '/sent .* bytes/d' \
+#       -e '/total size/d'
+# echo "----------"
+
+# Существующие правила
 .git
 .gitignore
 .dev/
@@ -7,3 +26,24 @@ agent_bin
 bot_bin
 docker-compose.yml
 README.md
+
+# --- Новые правила для очистки контекста бота ---
+
+# Исключаем файлы и сервисы, не относящиеся к боту
+agent/
+
+# Исключаем служебные файлы инструментов и шаблоны
+.clinerules
+*.template
+
+# Исключаем сам Dockerfile и метаданные Docker
+.dockerignore
+**/dockerfile
+**/Dockerfile*
+docker-compose*.yml
+
+# Исключаем исходники Protobuf (если сгенерированный Go-код уже закоммичен)
+*.proto
+
+# Исключаем документацию и статику
+*.md
