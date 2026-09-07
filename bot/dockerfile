@@ -4,6 +4,11 @@ FROM golang:1.26.5-alpine AS builder
 # Создаем рабочую папку внутри контейнера сборщика
 WORKDIR /app
 
+# Аргументы для внедрения версии через ldflags при сборке в Docker
+ARG VERSION=v1.0.0
+ARG COMMIT=none
+ARG DATE=unknown
+
 # Копируем файлы модулей из КОРНЯ проекта для загрузки зависимостей
 COPY go.mod go.sum ./
 RUN go mod download
@@ -11,8 +16,10 @@ RUN go mod download
 # Копируем весь исходный код проекта (включая папку proto)
 COPY . .
 
-# Компилируем бота в статический бинарник без внешних привязок к системе
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -o bot_bin ./bot/main.go
+# Компилируем бота в статический бинарник с внедренной версией через -ldflags
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 \
+    go build -ldflags="-s -w -X main.version=$VERSION -X main.gitCommit=$COMMIT -X main.buildDate=$DATE" \
+    -o bot_bin ./bot
 
 # Этап 2: Финальный минималистичный образ для продакшена
 FROM alpine:latest

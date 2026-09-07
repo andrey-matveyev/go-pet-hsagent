@@ -1,5 +1,6 @@
 #!/bin/bash
 
+# Единый источник правды для версии (можно переопределить или оставить здесь)
 VERSION="v1.0.0"
 COMMIT=$(git rev-parse --short HEAD 2>/dev/null || echo "none")
 DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")
@@ -12,3 +13,4 @@ go build -ldflags="-s -w -X main.version=$VERSION -X main.gitCommit=$COMMIT -X m
 
 echo "Build completed successfully!"
 ./bot_bin --version
+
