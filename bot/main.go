@@ -8,7 +8,7 @@ import (
 	"strconv"
 	"time"
 
-	pb "go-pet-hsagent/proto" // Имя вашего корневого модуля + путь к proto
+	pb "go-pet-hsagent/proto" // Имя корневого модуля + путь к proto
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 
@@ -20,7 +20,7 @@ var (
 	tgBotToken string
 	chatID     int64
 	// Для локального теста в системе используем 127.0.0.1
-	// Для CasaOS мы позже сменим этот адрес на host.docker.internal:50051
+	// Для CasaOS позже сменить этот адрес на host.docker.internal:50051
 	agentAddr = "host.docker.internal:50051"
 )
 
@@ -75,7 +75,7 @@ func main() {
 		}
 	}()
 
-	// Обработка входящих команд из вашего Телеграм-чата
+	// Обработка входящих команд из Телеграм-чата
 	u := tgbotapi.NewUpdate(0)
 	u.Timeout = 60
 	updates := bot.GetUpdatesChan(u)
@@ -85,7 +85,7 @@ func main() {
 			continue
 		}
 
-		// 🔒 ЖЕСТКАЯ ПРОВЕРКА БЕЗОПАСНОСТИ: Игнорируем абсолютно всех, кроме вас
+		// 🔒 ЖЕСТКАЯ ПРОВЕРКА БЕЗОПАСНОСТИ: Игнор абсолютно всех, кроме хозяина
 		if update.Message.Chat.ID != chatID {
 			log.Printf("⚠️ Попытка несанкционированного доступа от ChatID: %d, Текст: %s",
 				update.Message.Chat.ID, update.Message.Text)
