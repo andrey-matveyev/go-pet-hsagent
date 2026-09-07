@@ -17,6 +17,10 @@ import (
 )
 
 var (
+	version   = "v1.0.0"  // Переопределяется через -ldflags
+	gitCommit = "unknown" // Переопределяется через -ldflags
+	buildDate = "unknown" // Переопределяется через -ldflags
+
 	tgBotToken string
 	chatID     int64
 	// Для локального теста в системе используем 127.0.0.1
@@ -25,6 +29,12 @@ var (
 )
 
 func main() {
+	// Поддержка аргумента --version / -v
+	if len(os.Args) > 1 && (os.Args[1] == "--version" || os.Args[1] == "-v") {
+		fmt.Printf("hsagent-bot version: %s (commit: %s, built at: %s)\n", version, gitCommit, buildDate)
+		os.Exit(0)
+	}
+
 	// Считываем конфиги из переменных окружения
 	tgBotToken = os.Getenv("TG_TOKEN")
 	idRaw := os.Getenv("TG_CHAT_ID")
@@ -123,3 +133,4 @@ func main() {
 		}
 	}
 }
+
