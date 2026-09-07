@@ -1,0 +1,9 @@
+.git
+.gitignore
+.dev/
+*.env
+.env
+agent_bin
+bot_bin
+docker-compose.yml
+README.md
