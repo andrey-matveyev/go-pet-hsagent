@@ -17,11 +17,20 @@ services:
         en_us: Telegram Bot for HP 4740s home server internal monitoring and backup control.
       icon: https://flaticon.com
       title:
+        custom: Server Monitor Bot
         en_us: Server Monitor Bot
       developer: Andrey
 
 # Мета-данные для интеграции в магазин приложений CasaOS
 x-casaos:
-  nickname: Server Monitor Bot
   author: Andrey
   icon: /charging-station.png
+  nickname: Server Monitor Bot
+  title:
+    custom: Server Monitor Bot
+    en_us: Server Monitor Bot
+  hostname: ""
+  scheme: http
+  index: /
+  port_map: ""
+  category: self
