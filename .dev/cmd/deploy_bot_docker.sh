@@ -22,6 +22,7 @@ set -e
 #      Cmnd_Alias BOT_CMDS = /usr/bin/docker load -i /opt/hsagent-bot/hsagent-bot.tar, \
 #                            /usr/bin/docker compose *, \
 #                            /usr/bin/docker rm -f hs_bot_container, \
+#                            /usr/bin/docker ps *, \
 #                            /usr/bin/cp /opt/hsagent-bot/docker-compose.yml /var/lib/casaos/apps/hsagent-bot/docker-compose.yml
 #      andrey ALL=(ALL) NOPASSWD: BOT_CMDS
 # =============================================================================
