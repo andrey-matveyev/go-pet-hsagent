@@ -21,6 +21,7 @@ set -e
 #   3. Configure sudoers via `sudo visudo` for NOPASSWD execution of docker/cp commands:
 #      Cmnd_Alias BOT_CMDS = /usr/bin/docker load -i /opt/hsagent-bot/hsagent-bot.tar, \
 #                            /usr/bin/docker compose *, \
+#                            /usr/bin/docker rm -f hs_bot_container, \
 #                            /usr/bin/cp /opt/hsagent-bot/docker-compose.yml /var/lib/casaos/apps/hsagent-bot/docker-compose.yml
 #      andrey ALL=(ALL) NOPASSWD: BOT_CMDS
 # =============================================================================
@@ -53,6 +54,9 @@ echo "=== 4. Verifying mandatory .env file on remote server ==="
 ssh "${REMOTE_USER}@${REMOTE_HOST}" "if [ ! -f ${CASAOS_APP_DIR}/.env ]; then echo 'Error: Required .env file is missing at ${CASAOS_APP_DIR}/.env on remote server!' >&2; exit 1; fi"
 
 echo "=== 5. Deploying on remote server ==="
+# Удаляем старый контейнер с таким же именем, если он остался от прежних ручных запусков
+ssh "${REMOTE_USER}@${REMOTE_HOST}" "sudo docker rm -f hs_bot_container || true"
+
 ssh "${REMOTE_USER}@${REMOTE_HOST}" "sudo docker load -i ${REMOTE_DIR}/${TAR_NAME}"
 
 # Копируем docker-compose.yml в папку приложения CasaOS
