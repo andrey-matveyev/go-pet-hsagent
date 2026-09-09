@@ -1,10 +1,13 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"os"
+	"os/signal"
 	"strconv"
+	"syscall"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
@@ -19,11 +22,16 @@ func main() {
 	// Read configuration from environment variables
 	tgBotToken = os.Getenv("TG_TOKEN")
 	idRaw := os.Getenv("TG_CHAT_ID")
-	chatID, _ = strconv.ParseInt(idRaw, 10, 64)
 
-	if tgBotToken == "" || chatID == 0 {
-		log.Fatalf("❌ Error: Environment variables TG_TOKEN and TG_CHAT_ID must be set!")
+	var err error
+	chatID, err = strconv.ParseInt(idRaw, 10, 64)
+	if tgBotToken == "" || err != nil || chatID == 0 {
+		log.Fatalf("❌ Error: TG_TOKEN and a valid non-zero TG_CHAT_ID environment variables must be set!")
 	}
+
+	// 1. Создаем контекст, который отменится при SIGINT (Ctrl+C) или SIGTERM (docker stop)
+	ctx, stop := signal.NotifyContext(context.Background(), os.Interrupt, syscall.SIGTERM)
+	defer stop()
 
 	// Initialize Telegram API
 	bot, err := tgbotapi.NewBotAPI(tgBotToken)
@@ -39,9 +47,10 @@ func main() {
 	}
 	defer conn.Close()
 
-	// 🛡️ FAULT TOLERANCE: Start background gRPC alarm stream
-	startAlarmStream(client, bot)
+	// 🛡️ FAULT TOLERANCE: Передаем ctx первым аргументом
+	startAlarmStream(ctx, client, bot)
 
 	// Start processing incoming Telegram chat commands
-	startTelegramBotLoop(client, bot)
+	// (Идеально сюда тоже передать ctx, если ваша функция это поддерживает)
+	startTelegramBotLoop(ctx, client, bot)
 }

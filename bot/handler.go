@@ -12,79 +12,130 @@ import (
 )
 
 // startAlarmStream runs a background goroutine to stream alarms from the gRPC agent
-func startAlarmStream(client pb.MonitorServiceClient, bot *tgbotapi.BotAPI) {
+func startAlarmStream(ctx context.Context, client pb.MonitorServiceClient, bot *tgbotapi.BotAPI) {
 	go func() {
 		for {
-			log.Println("🔄 Attempting to connect to gRPC alarm stream...")
-			stream, err := client.StreamEvents(context.Background(), &pb.Empty{})
-			if err != nil {
-				log.Printf("❌ Failed to open stream: %v. Retrying in 5 seconds...", err)
-				time.Sleep(5 * time.Second)
-				continue
+			select {
+			case <-ctx.Done():
+				return
+			default:
 			}
 
-			log.Println("✅ Permanent gRPC notification stream established!")
-			for {
-				event, err := stream.Recv()
-				if err != nil {
-					log.Printf("⚠️ Stream broken (%v). Reconnecting...", err)
-					break // Break to outer loop for auto-reconnect
-				}
-				// Alarm received from Agent -> send push message to Telegram
-				msg := tgbotapi.NewMessage(chatID, event.Message)
-				bot.Send(msg)
+			if err := processStream(ctx, client, bot); err != nil {
+				log.Printf("⚠️ Stream connection issue: %v. Reconnecting in 5s...", err)
 			}
+
 			time.Sleep(5 * time.Second)
 		}
 	}()
 }
 
+func processStream(ctx context.Context, client pb.MonitorServiceClient, bot *tgbotapi.BotAPI) error {
+	streamCtx, cancel := context.WithCancel(ctx)
+	defer cancel() // Ресурсы освободятся ровно при завершении processStream
+
+	log.Println("🔄 Attempting to connect to gRPC alarm stream...")
+	stream, err := client.StreamEvents(streamCtx, &pb.Empty{})
+	if err != nil {
+		return fmt.Errorf("failed to open stream: %w", err)
+	}
+
+	log.Println("✅ Permanent gRPC notification stream established!")
+	for {
+		event, err := stream.Recv()
+		if err != nil {
+			return fmt.Errorf("stream read error: %w", err)
+		}
+
+		msg := tgbotapi.NewMessage(chatID, event.Message)
+		bot.Send(msg)
+	}
+}
+
 // startTelegramBotLoop handles incoming updates and commands from Telegram
-func startTelegramBotLoop(client pb.MonitorServiceClient, bot *tgbotapi.BotAPI) {
+func startTelegramBotLoop(ctx context.Context, client pb.MonitorServiceClient, bot *tgbotapi.BotAPI) {
 	u := tgbotapi.NewUpdate(0)
 	u.Timeout = 60
+
 	updates := bot.GetUpdatesChan(u)
 
-	for update := range updates {
-		if update.Message == nil {
-			continue
-		}
+	// Гарантируем остановку получения апдейтов при выходе из функции
+	defer bot.StopReceivingUpdates()
 
-		// 🔒 STRICT SECURITY CHECK: Ignore everyone except the owner
-		if update.Message.Chat.ID != chatID {
-			log.Printf("⚠️ Unauthorized access attempt from ChatID: %d, Text: %s",
-				update.Message.Chat.ID, update.Message.Text)
-			continue
-		}
+	log.Println("🚀 Telegram bot update loop started listening...")
 
-		switch update.Message.Text {
-		case "/status": // On-demand metrics request
-			res, err := client.GetBatteryStatus(context.Background(), &pb.Empty{})
-			var text string
-			if err != nil {
-				text = "❌ Failed to fetch data from Agent. Please check if the agent binary is running."
-			} else {
-				text = fmt.Sprintf("📊 **HP 4740s Server Status:**\n\n"+
-					"🔋 **Battery:** %s (%d%%)\n"+
-					"🌡 **CPU Temperature:** %.1f°C\n\n"+
-					"💾 **Disk Usage:**\n%s",
-					res.BatteryStatus, res.BatteryCapacity, res.CpuTemperature, res.DiskUsageInfo)
+	for {
+		select {
+		case <-ctx.Done():
+			log.Println("🛑 Stopping Telegram bot update loop...")
+			return
+
+		case update, ok := <-updates:
+			if !ok {
+				log.Println("⚠️ Telegram updates channel closed.")
+				return
 			}
-			msg := tgbotapi.NewMessage(chatID, text)
-			msg.ParseMode = "Markdown"
-			bot.Send(msg)
 
-		case "/test": // 🧪 Forced self-test run
-			res, err := client.TestSystems(context.Background(), &pb.Empty{})
-			var text string
-			if err != nil {
-				text = "❌ gRPC error while invoking self-test."
-			} else {
-				text = res.ResultMessage
+			if update.Message == nil {
+				continue
 			}
-			msg := tgbotapi.NewMessage(chatID, text)
-			msg.ParseMode = "Markdown"
-			bot.Send(msg)
+
+			// 🔒 STRICT SECURITY CHECK: Ignore everyone except the owner
+			if update.Message.Chat.ID != chatID {
+				log.Printf("⚠️ Unauthorized access attempt from ChatID: %d, Text: %s",
+					update.Message.Chat.ID, update.Message.Text)
+				continue
+			}
+
+			// Обрабатываем только команды
+			if !update.Message.IsCommand() {
+				continue
+			}
+
+			// Запускаем обработку команды
+			handleCommand(ctx, client, bot, update.Message)
 		}
+	}
+}
+
+// Выносим обработку команд в отдельную функцию для чистоты и удобства defer/timeouts
+func handleCommand(parentCtx context.Context, client pb.MonitorServiceClient, bot *tgbotapi.BotAPI, msg *tgbotapi.Message) {
+	// Ограничиваем время ожидания ответа от gRPC агента 5 секундами
+	reqCtx, cancel := context.WithTimeout(parentCtx, 5*time.Second)
+	defer cancel()
+
+	var text string
+
+	switch msg.Command() {
+	case "status": // /status
+		res, err := client.GetBatteryStatus(reqCtx, &pb.Empty{})
+		if err != nil {
+			log.Printf("⚠️ GetBatteryStatus RPC error: %v", err)
+			text = "❌ Failed to fetch data from Agent. Please check if the agent binary is running."
+		} else {
+			text = fmt.Sprintf("📊 **HP 4740s Server Status:**\n\n"+
+				"🔋 **Battery:** %s (%d%%)\n"+
+				"🌡 **CPU Temperature:** %.1f°C\n\n"+
+				"💾 **Disk Usage:**\n%s",
+				res.BatteryStatus, res.BatteryCapacity, res.CpuTemperature, res.DiskUsageInfo)
+		}
+
+	case "test": // /test
+		res, err := client.TestSystems(reqCtx, &pb.Empty{})
+		if err != nil {
+			log.Printf("⚠️ TestSystems RPC error: %v", err)
+			text = "❌ gRPC error while invoking self-test."
+		} else {
+			text = res.ResultMessage
+		}
+
+	default:
+		return // Неизвестная команда — просто игнорируем
+	}
+
+	replyMsg := tgbotapi.NewMessage(chatID, text)
+	replyMsg.ParseMode = "Markdown"
+	if _, err := bot.Send(replyMsg); err != nil {
+		log.Printf("⚠️ Failed to send Telegram response: %v", err)
 	}
 }

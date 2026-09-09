@@ -1,17 +1,32 @@
 package main
 
 import (
+	"fmt"
 	pb "go-pet-hsagent/proto"
+	"time"
 
 	"google.golang.org/grpc"
-	"google.golang.org/grpc/credentials/insecure"
+	"google.golang.org/grpc/credentials/insecure" // Новый импорт для нешифрованного соединения
+	"google.golang.org/grpc/keepalive"
 )
 
+var kacp = keepalive.ClientParameters{
+	Time:                1 * time.Minute, // Пингуем раз в минуту
+	Timeout:             5 * time.Second, // Ждем ответ 5 секунд
+	PermitWithoutStream: true,            // Пингуем даже при отсутствии активных стримов
+}
+
 func initGRPCClient() (pb.MonitorServiceClient, *grpc.ClientConn, error) {
-	conn, err := grpc.Dial(agentAddr, grpc.WithTransportCredentials(insecure.NewCredentials()))
+	// Использование актуальной функции grpc.NewClient
+	conn, err := grpc.NewClient(
+		agentAddr, // Или адрес/сокет хоста для CasaOS
+		grpc.WithTransportCredentials(insecure.NewCredentials()), // Замена WithInsecure()
+		grpc.WithKeepaliveParams(kacp),
+	)
 	if err != nil {
-		return nil, nil, err
+		return nil, nil, fmt.Errorf("failed to create grpc client: %w", err)
 	}
+
 	client := pb.NewMonitorServiceClient(conn)
 	return client, conn, nil
 }
