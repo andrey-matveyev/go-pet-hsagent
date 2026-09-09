@@ -15,7 +15,7 @@ import (
 )
 
 var (
-	version   = "v1.0.0"  // Переопределяется через -ldflags
+	version   = "unknown" // Переопределяется через -ldflags
 	gitCommit = "unknown" // Переопределяется через -ldflags
 	buildDate = "unknown" // Переопределяется через -ldflags
 )
