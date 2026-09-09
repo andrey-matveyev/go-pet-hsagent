@@ -12,8 +12,6 @@ go build -ldflags="-s -w -X main.version=$VERSION -X main.gitCommit=$COMMIT -X m
 -o agent_bin \
 ./agent
 
-echo "Build completed successfully!"
-
 # Проверка того, что ни одна из переменных не осталась unknown
 if [ "$VERSION" = "unknown" ] || [ "$COMMIT" = "unknown" ] || [ "$DATE" = "unknown" ]; then
     echo "❌ Error: One or more build version fields are 'unknown' (VERSION: $VERSION, COMMIT: $COMMIT, DATE: $DATE). Aborting build!" >&2
@@ -21,4 +19,6 @@ if [ "$VERSION" = "unknown" ] || [ "$COMMIT" = "unknown" ] || [ "$DATE" = "unkno
 fi
 
 ./agent_bin --version
+
+echo "Build completed successfully!"
 
