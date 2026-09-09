@@ -1,0 +1,38 @@
+syntax = "proto3";
+
+// Имя пакета с версией
+package hsagent.v1;
+
+// go_package указываем так, чтобы сгенерированный Go-код ложился в ту же структуру
+option go_package = "go-pet-hsagent/proto/hsagent/v1;hsagentv1";
+
+service MonitorService {
+  rpc GetBatteryStatus(GetBatteryStatusRequest) returns (GetBatteryStatusResponse);
+  rpc StreamEvents(StreamEventsRequest) returns (stream StreamEventsResponse);
+  rpc TestSystems(TestSystemsRequest) returns (TestSystemsResponse);
+}
+
+// === Request / Response для GetBatteryStatus ===
+message GetBatteryStatusRequest {}
+
+message GetBatteryStatusResponse {
+  int32 battery_capacity = 1;
+  string battery_status = 2;
+  double cpu_temperature = 3;
+  string disk_usage_info = 4;
+}
+
+// === Request / Response для StreamEvents ===
+message StreamEventsRequest {}
+
+message StreamEventsResponse {
+  string type = 1;
+  string message = 2;
+}
+
+// === Request / Response для TestSystems ===
+message TestSystemsRequest {}
+
+message TestSystemsResponse {
+  string result_message = 1;
+}

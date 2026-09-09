@@ -6,7 +6,7 @@ import (
 	"log"
 	"time"
 
-	pb "go-pet-hsagent/proto"
+	pb "go-pet-hsagent/proto/hsagent/v1"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
@@ -35,7 +35,7 @@ func processStream(ctx context.Context, client pb.MonitorServiceClient, bot *tgb
 	defer cancel() // Ресурсы освободятся ровно при завершении processStream
 
 	log.Println("🔄 Attempting to connect to gRPC alarm stream...")
-	stream, err := client.StreamEvents(streamCtx, &pb.Empty{})
+	stream, err := client.StreamEvents(streamCtx, &pb.StreamEventsRequest{})
 	if err != nil {
 		return fmt.Errorf("failed to open stream: %w", err)
 	}
@@ -108,7 +108,7 @@ func handleCommand(parentCtx context.Context, client pb.MonitorServiceClient, bo
 
 	switch msg.Command() {
 	case "status": // /status
-		res, err := client.GetBatteryStatus(reqCtx, &pb.Empty{})
+		res, err := client.GetBatteryStatus(reqCtx, &pb.GetBatteryStatusRequest{})
 		if err != nil {
 			log.Printf("⚠️ GetBatteryStatus RPC error: %v", err)
 			text = "❌ Failed to fetch data from Agent. Please check if the agent binary is running."
@@ -121,7 +121,7 @@ func handleCommand(parentCtx context.Context, client pb.MonitorServiceClient, bo
 		}
 
 	case "test": // /test
-		res, err := client.TestSystems(reqCtx, &pb.Empty{})
+		res, err := client.TestSystems(reqCtx, &pb.TestSystemsRequest{})
 		if err != nil {
 			log.Printf("⚠️ TestSystems RPC error: %v", err)
 			text = "❌ gRPC error while invoking self-test."

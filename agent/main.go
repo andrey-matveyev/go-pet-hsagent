@@ -7,7 +7,7 @@ import (
 	"os"
 	"time"
 
-	pb "go-pet-hsagent/proto"
+	pb "go-pet-hsagent/proto/hsagent/v1"
 
 	"github.com/BurntSushi/toml"
 	"google.golang.org/grpc"
@@ -40,7 +40,7 @@ func main() {
 	kaep := keepalive.EnforcementPolicy{MinTime: 5 * time.Second, PermitWithoutStream: true}
 	kasp := keepalive.ServerParameters{Time: 30 * time.Second, Timeout: 5 * time.Second}
 	s := grpc.NewServer(grpc.KeepaliveEnforcementPolicy(kaep), grpc.KeepaliveParams(kasp))
-	srv := &server{cfg: &cfg, eventChan: make(chan *pb.EventNotification, 20), diskAlerted: make(map[string]bool)}
+	srv := &server{cfg: &cfg, eventChan: make(chan *pb.StreamEventsResponse, 20), diskAlerted: make(map[string]bool)}
 	pb.RegisterMonitorServiceServer(s, srv)
 
 	go srv.monitorBatteryLoop()

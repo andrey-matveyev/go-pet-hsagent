@@ -7,56 +7,8 @@ import (
 	"strings"
 	"time"
 
-	pb "go-pet-hsagent/proto"
+	pb "go-pet-hsagent/proto/hsagent/v1"
 )
-
-/*
-// Поток бэкапа
-func (s *server) runBackupRoutine() {
-	s.eventChan <- &pb.EventNotification{Type: "backup_status", Message: "🚀 Запущен регламентный бэкап диска стореджа."}
-	var logBuilder strings.Builder
-	discDev, err := runCmd("blkid", "-U", s.cfg.Backup.UUID)
-
-	if err != nil || discDev == "" {
-		logBuilder.WriteString("⚡ Диск не обнаружен. Пробуем подать питание на USB 3.0 порт...\n")
-		runCmd("sh", "-c", fmt.Sprintf("echo '%s' > /sys/bus/pci/drivers/xhci_hcd/unbind", s.cfg.Backup.XhciPCI))
-		time.Sleep(1 * time.Second)
-		runCmd("sh", "-c", fmt.Sprintf("echo '%s' > /sys/bus/pci/drivers/xhci_hcd/bind", s.cfg.Backup.XhciPCI))
-		time.Sleep(5 * time.Second)
-		discDev, _ = runCmd("blkid", "-U", s.cfg.Backup.UUID)
-	}
-
-	if discDev == "" {
-		s.eventChan <- &pb.EventNotification{Type: "backup_status", Message: "❌ Ошибка бэкапа: Внешний жесткий диск не найден! Проверьте USB-кабель."}
-		return
-	}
-
-	runCmd("mkdir", "-p", s.cfg.Backup.MountPoint)
-	mountCheck, _ := runCmd("mountpoint", "-q", s.cfg.Backup.MountPoint)
-	if mountCheck != "" {
-		_, err = runCmd("mount", discDev, s.cfg.Backup.MountPoint)
-		if err != nil {
-			s.eventChan <- &pb.EventNotification{Type: "backup_status", Message: fmt.Sprintf("❌ Ошибка монтирования: %v", err)}
-			return
-		}
-	}
-
-	logBuilder.WriteString("🔄 Запущена синхронизация rsync...\n")
-	rsyncOut, err := runCmd("rsync", "-aHAX", "--delete", s.cfg.Backup.SourceDir, s.cfg.Backup.MountPoint+"/")
-	logBuilder.WriteString(rsyncOut + "\n")
-
-	if err != nil {
-		s.eventChan <- &pb.EventNotification{Type: "backup_status", Message: fmt.Sprintf("❌ Ошибка выполнения rsync:\n%s", logBuilder.String())}
-		return
-	}
-
-	runCmd("umount", s.cfg.Backup.MountPoint)
-	diskBase := strings.TrimRight(discDev, "0123456789")
-	runCmd("udisksctl", "power-off", "-b", diskBase)
-
-	s.eventChan <- &pb.EventNotification{Type: "backup_status", Message: "✅ Резервное копирование успешно завершено. Внешний диск обесточен."}
-}
-*/
 
 func (s *server) startSchedulerLoop() {
 	for {
@@ -74,7 +26,7 @@ func (s *server) runBackupRoutine() {
 	s.mu.Lock()
 	if s.isRunning {
 		s.mu.Unlock()
-		s.eventChan <- &pb.EventNotification{Type: "backup_status", Message: "⚠️ Бэкап уже выполняется в другом потоке. Новый запуск отменен."}
+		s.eventChan <- &pb.StreamEventsResponse{Type: "backup_status", Message: "⚠️ Бэкап уже выполняется в другом потоке. Новый запуск отменен."}
 		return
 	}
 	s.isRunning = true
@@ -86,7 +38,7 @@ func (s *server) runBackupRoutine() {
 		s.mu.Unlock()
 	}()
 
-	s.eventChan <- &pb.EventNotification{Type: "backup_status", Message: "🚀 Запущен регламентный бэкап диска стореджа."}
+	s.eventChan <- &pb.StreamEventsResponse{Type: "backup_status", Message: "🚀 Запущен регламентный бэкап диска стореджа."}
 
 	// Создаем общий контекст на всю операцию (например, жесткий лимит 4 часа на весь бэкап)
 	globalCtx, cancel := context.WithTimeout(context.Background(), 4*time.Hour)
@@ -108,7 +60,7 @@ func (s *server) runBackupRoutine() {
 		select {
 		case <-time.After(5 * time.Second):
 		case <-globalCtx.Done():
-			s.eventChan <- &pb.EventNotification{Type: "backup_status", Message: "❌ Ошибка: Превышен таймаут при перезапуске USB порта."}
+			s.eventChan <- &pb.StreamEventsResponse{Type: "backup_status", Message: "❌ Ошибка: Превышен таймаут при перезапуске USB порта."}
 			return
 		}
 
@@ -127,13 +79,13 @@ func (s *server) runBackupRoutine() {
 	}
 
 	if err != nil || discDev == "" || strings.Contains(discDev, "exit status") {
-		s.eventChan <- &pb.EventNotification{Type: "backup_status", Message: "❌ Ошибка бэкапа: Внешний жесткий диск не найден! Проверьте USB-кабель."}
+		s.eventChan <- &pb.StreamEventsResponse{Type: "backup_status", Message: "❌ Ошибка бэкапа: Внешний жесткий диск не найден! Проверьте USB-кабель."}
 		return
 	}
 
 	// 2. Подготовка точки монтирования
 	if _, err := runCmdWithContext(globalCtx, "mkdir", "-p", s.cfg.Backup.MountPoint); err != nil {
-		s.eventChan <- &pb.EventNotification{Type: "backup_status", Message: fmt.Sprintf("❌ Ошибка создания папки монтирования: %v", err)}
+		s.eventChan <- &pb.StreamEventsResponse{Type: "backup_status", Message: fmt.Sprintf("❌ Ошибка создания папки монтирования: %v", err)}
 		return
 	}
 
@@ -143,7 +95,7 @@ func (s *server) runBackupRoutine() {
 	if err != nil || strings.TrimSpace(mountCheck) == "" {
 		_, err = runCmdWithContext(globalCtx, "mount", discDev, s.cfg.Backup.MountPoint)
 		if err != nil {
-			s.eventChan <- &pb.EventNotification{Type: "backup_status", Message: fmt.Sprintf("❌ Ошибка монтирования: %v", err)}
+			s.eventChan <- &pb.StreamEventsResponse{Type: "backup_status", Message: fmt.Sprintf("❌ Ошибка монтирования: %v", err)}
 			return
 		}
 	}
@@ -151,7 +103,7 @@ func (s *server) runBackupRoutine() {
 	// 3. ЖЕЛЕЗНАЯ ЗАЩИТА СИСТЕМНОГО ДИСКА (Double Check)
 	realTargetDev, err := runCmdWithContext(globalCtx, "findmnt", "-n", "-o", "SOURCE", "-M", s.cfg.Backup.MountPoint)
 	if err != nil || !strings.Contains(strings.TrimSpace(realTargetDev), discDev) {
-		s.eventChan <- &pb.EventNotification{
+		s.eventChan <- &pb.StreamEventsResponse{
 			Type:    "backup_status",
 			Message: "❌ КРИТИЧЕСКАЯ ОШИБКА: Защита сработала. Папка не указывает на USB-диск! Бэкап заблокирован.",
 		}
@@ -170,7 +122,7 @@ func (s *server) runBackupRoutine() {
 	logBuilder.WriteString(rsyncOut + "\n")
 
 	if rsyncErr != nil {
-		s.eventChan <- &pb.EventNotification{Type: "backup_status", Message: fmt.Sprintf("❌ Ошибка выполнения rsync (или таймаут):\n%s", logBuilder.String())}
+		s.eventChan <- &pb.StreamEventsResponse{Type: "backup_status", Message: fmt.Sprintf("❌ Ошибка выполнения rsync (или таймаут):\n%s", logBuilder.String())}
 		// Не выходим, пытаемся безопасно отмонтировать то, что успело записаться
 	}
 
@@ -189,6 +141,6 @@ func (s *server) runBackupRoutine() {
 	}
 
 	if rsyncErr == nil {
-		s.eventChan <- &pb.EventNotification{Type: "backup_status", Message: "✅ Резервное копирование успешно завершено. Внешний диск обесточен."}
+		s.eventChan <- &pb.StreamEventsResponse{Type: "backup_status", Message: "✅ Резервное копирование успешно завершено. Внешний диск обесточен."}
 	}
 }

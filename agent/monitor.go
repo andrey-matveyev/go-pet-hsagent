@@ -8,7 +8,7 @@ import (
 	"syscall"
 	"time"
 
-	pb "go-pet-hsagent/proto"
+	pb "go-pet-hsagent/proto/hsagent/v1"
 )
 
 func getBatteryInfo() (int, string, error) {
@@ -71,7 +71,7 @@ func (s *server) monitorBatteryLoop() {
 
 			// Оповещаем если заряд упал до 20% или 10%
 			if (cap == 20 || cap == 10) && s.lastCap != cap {
-				s.eventChan <- &pb.EventNotification{
+				s.eventChan <- &pb.StreamEventsResponse{
 					Type:    "battery",
 					Message: fmt.Sprintf("🪫 Низкий заряд батареи: %d%% (%s)", cap, stat),
 				}
@@ -82,7 +82,7 @@ func (s *server) monitorBatteryLoop() {
 				if stat == "Discharging" {
 					msg = "🔋 Ноутбук перешел на работу от батареи."
 				}
-				s.eventChan <- &pb.EventNotification{Type: "battery", Message: msg}
+				s.eventChan <- &pb.StreamEventsResponse{Type: "battery", Message: msg}
 				s.lastStat = stat
 			}
 
@@ -105,7 +105,7 @@ func (s *server) monitorCpuLoop() {
 			s.mu.Lock()
 			if temp > s.cfg.Monitoring.CpuTempThreshold {
 				if !s.cpuAlerted {
-					s.eventChan <- &pb.EventNotification{
+					s.eventChan <- &pb.StreamEventsResponse{
 						Type:    "cpu",
 						Message: fmt.Sprintf("🔥 Перегрев процессора! Температура: %.1f°C (Порог: %.1f°C)", temp, s.cfg.Monitoring.CpuTempThreshold),
 					}
@@ -113,7 +113,7 @@ func (s *server) monitorCpuLoop() {
 				}
 			} else {
 				if s.cpuAlerted && temp < s.cfg.Monitoring.CpuTempThreshold-5.0 {
-					s.eventChan <- &pb.EventNotification{
+					s.eventChan <- &pb.StreamEventsResponse{
 						Type:    "cpu",
 						Message: fmt.Sprintf("✅ Температура процессора в норме: %.1f°C", temp),
 					}
@@ -149,7 +149,7 @@ func (s *server) monitorDisksLoop() {
 				isAlerted := s.diskAlerted[name]
 				if pct < s.cfg.Monitoring.DiskMinFreePercent {
 					if !isAlerted {
-						s.eventChan <- &pb.EventNotification{
+						s.eventChan <- &pb.StreamEventsResponse{
 							Type:    "disk",
 							Message: fmt.Sprintf("⚠️ Мало места на диске [%s] (%s): %s", name, path, report),
 						}
@@ -157,7 +157,7 @@ func (s *server) monitorDisksLoop() {
 					}
 				} else {
 					if isAlerted && pct > s.cfg.Monitoring.DiskMinFreePercent+5.0 {
-						s.eventChan <- &pb.EventNotification{
+						s.eventChan <- &pb.StreamEventsResponse{
 							Type:    "disk",
 							Message: fmt.Sprintf("✅ Место на диске [%s] восстановилось: %s", name, report),
 						}

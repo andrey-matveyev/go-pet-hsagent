@@ -2,7 +2,7 @@ package main
 
 import (
 	"fmt"
-	pb "go-pet-hsagent/proto"
+	pb "go-pet-hsagent/proto/hsagent/v1"
 	"time"
 
 	"google.golang.org/grpc"

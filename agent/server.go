@@ -6,13 +6,13 @@ import (
 	"log"
 	"sync"
 
-	pb "go-pet-hsagent/proto"
+	pb "go-pet-hsagent/proto/hsagent/v1"
 )
 
 type server struct {
 	pb.UnimplementedMonitorServiceServer
 	cfg         *config
-	eventChan   chan *pb.EventNotification
+	eventChan   chan *pb.StreamEventsResponse
 	mu          sync.Mutex
 	lastCap     int
 	lastStat    string
@@ -22,7 +22,7 @@ type server struct {
 }
 
 // gRPC Метод: Получение системного статуса
-func (s *server) GetBatteryStatus(ctx context.Context, in *pb.Empty) (*pb.SystemStatusResponse, error) {
+func (s *server) GetBatteryStatus(ctx context.Context, in *pb.GetBatteryStatusRequest) (*pb.GetBatteryStatusResponse, error) {
 	bCap, bStat, _ := getBatteryInfo()
 	cpuTemp, _ := getCpuTemperature()
 	_, sysDiskReport, _ := getDiskUsage("/")
@@ -30,7 +30,7 @@ func (s *server) GetBatteryStatus(ctx context.Context, in *pb.Empty) (*pb.System
 
 	diskReport := fmt.Sprintf("💻 Системный SSD: %s\n📸 Хранилище Immich: %s", sysDiskReport, storageDiskReport)
 
-	return &pb.SystemStatusResponse{
+	return &pb.GetBatteryStatusResponse{
 		BatteryCapacity: int32(bCap),
 		BatteryStatus:   bStat,
 		CpuTemperature:  cpuTemp,
@@ -39,7 +39,7 @@ func (s *server) GetBatteryStatus(ctx context.Context, in *pb.Empty) (*pb.System
 }
 
 // gRPC Метод: Стрим алармов
-func (s *server) StreamEvents(in *pb.Empty, stream pb.MonitorService_StreamEventsServer) error {
+func (s *server) StreamEvents(in *pb.StreamEventsRequest, stream pb.MonitorService_StreamEventsServer) error {
 	log.Println("🤖 Бот успешно подключился к gRPC стриму событий")
 	for event := range s.eventChan {
 		if err := stream.Send(event); err != nil {
@@ -51,15 +51,15 @@ func (s *server) StreamEvents(in *pb.Empty, stream pb.MonitorService_StreamEvent
 }
 
 // gRPC Метод: Тест системы (/test)
-func (s *server) TestSystems(ctx context.Context, in *pb.Empty) (*pb.TestResponse, error) {
+func (s *server) TestSystems(ctx context.Context, in *pb.TestSystemsRequest) (*pb.TestSystemsResponse, error) {
 	log.Println("🔍 Запущен принудительный тест систем...")
 
-	s.eventChan <- &pb.EventNotification{
+	s.eventChan <- &pb.StreamEventsResponse{
 		Type:    "test",
 		Message: "🔔 Тестовое уведомление: gRPC-стриминг работает корректно!",
 	}
 
-	return &pb.TestResponse{
+	return &pb.TestSystemsResponse{
 		ResultMessage: "Тестовое событие успешно отправлено в стрим.",
 	}, nil
 }
