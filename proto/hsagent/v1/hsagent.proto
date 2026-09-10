@@ -10,6 +10,7 @@ service MonitorService {
   rpc GetBatteryStatus(GetBatteryStatusRequest) returns (GetBatteryStatusResponse);
   rpc StreamEvents(StreamEventsRequest) returns (stream StreamEventsResponse);
   rpc TestSystems(TestSystemsRequest) returns (TestSystemsResponse);
+  rpc TriggerBackup(TriggerBackupRequest) returns (TriggerBackupResponse);
 }
 
 // === Request / Response для GetBatteryStatus ===
@@ -34,5 +35,12 @@ message StreamEventsResponse {
 message TestSystemsRequest {}
 
 message TestSystemsResponse {
+  string result_message = 1;
+}
+
+// === Request / Response для TriggerBackup ===
+message TriggerBackupRequest {}
+
+message TriggerBackupResponse {
   string result_message = 1;
 }

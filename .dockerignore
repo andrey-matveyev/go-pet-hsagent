@@ -25,6 +25,7 @@
 agent_bin
 bot_bin
 docker-compose.yml
+buf.yaml
 README.md
 full_project.txt
 

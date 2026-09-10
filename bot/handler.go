@@ -128,12 +128,21 @@ func handleCommand(parentCtx context.Context, client pb.MonitorServiceClient, bo
 		} else {
 			text = res.ResultMessage
 		}
+	case "backup": // /backup
+		res, err := client.TriggerBackup(reqCtx, &pb.TriggerBackupRequest{})
+		if err != nil {
+			log.Printf("⚠️ TriggerBackup RPC error: %v", err)
+			text = "❌ gRPC error while triggering backup."
+		} else {
+			text = res.ResultMessage
+		}
 
 	default:
 		text = "❌ **Unknown command.**\n\n" +
 			"📋 **Supported commands:**\n" +
 			"/status — Get battery status, CPU temperature, and disk usage\n" +
-			"/test — Run forced system self-test"
+			"/test — Run forced system self-test\n" +
+			"/backup — Trigger forced storage backup"
 	}
 
 	replyMsg := tgbotapi.NewMessage(chatID, text)

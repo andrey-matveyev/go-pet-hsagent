@@ -63,3 +63,15 @@ func (s *server) TestSystems(ctx context.Context, in *pb.TestSystemsRequest) (*p
 		ResultMessage: "Тестовое событие успешно отправлено в стрим.",
 	}, nil
 }
+
+// gRPC Метод: Ручной запуск бэкапа (/backup)
+func (s *server) TriggerBackup(ctx context.Context, in *pb.TriggerBackupRequest) (*pb.TriggerBackupResponse, error) {
+	log.Println("🚀 Получена команда из Telegram на принудительный запуск бэкапа...")
+
+	// Запускаем бэкап асинхронно в фоне (в том же стиле, что и регламентный)
+	go s.runBackupRoutine()
+
+	return &pb.TriggerBackupResponse{
+		ResultMessage: "🚀 Запущен принудительный бэкап хранилища по команде из Telegram.",
+	}, nil
+}
