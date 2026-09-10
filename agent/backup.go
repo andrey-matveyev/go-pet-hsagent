@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"fmt"
+	"log"
 	"path/filepath"
 	"strings"
 	"time"
@@ -22,6 +23,15 @@ func (s *server) startSchedulerLoop() {
 }
 
 func (s *server) runBackupRoutine() {
+	// Проверка источника питания: бекап разрешен только при работе от сети (AC power).
+	// Если устройство работает от батареи (статус Discharging), процесс отменяется.
+	if cap, stat, err := getBatteryInfo(); err == nil && stat == "Discharging" {
+		msg := fmt.Sprintf("⚠️ Процесс бэкапа отменен: сервер работает от батареи (%d%%, Discharging). Резервное копирование выполняется только при питании от сети.", cap)
+		log.Println(msg)
+		s.eventChan <- &pb.StreamEventsResponse{Type: "backup_status", Message: msg}
+		return
+	}
+
 	// 0. Защита от Race Condition и параллельного запуска
 	s.mu.Lock()
 	if s.isRunning {
