@@ -130,7 +130,10 @@ func handleCommand(parentCtx context.Context, client pb.MonitorServiceClient, bo
 		}
 
 	default:
-		return // Неизвестная команда — просто игнорируем
+		text = "❌ **Unknown command.**\n\n" +
+			"📋 **Supported commands:**\n" +
+			"/status — Get battery status, CPU temperature, and disk usage\n" +
+			"/test — Run forced system self-test"
 	}
 
 	replyMsg := tgbotapi.NewMessage(chatID, text)
