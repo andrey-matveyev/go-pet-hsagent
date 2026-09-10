@@ -8,11 +8,44 @@ import (
 
 	pb "go-pet-hsagent/proto/hsagent/v1"
 
+	"github.com/andrey-matveyev/go-library-queue/queue"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
 // startAlarmStream runs a background goroutine to stream alarms from the gRPC agent
 func startAlarmStream(ctx context.Context, client pb.MonitorServiceClient, bot *tgbotapi.BotAPI) {
+	listQueue := queue.NewListQueue[tgbotapi.Chattable]()
+	inpChan := make(chan tgbotapi.Chattable, 100)
+	outChan := queue.AddQueue(ctx, listQueue, inpChan)
+
+	// Worker goroutine responsible for sending messages to Telegram one by one strictly
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case msg, ok := <-outChan:
+				if !ok {
+					return
+				}
+				for {
+					select {
+					case <-ctx.Done():
+						return
+					default:
+					}
+
+					if _, err := bot.Send(msg); err != nil {
+						log.Printf("⚠️ Failed to send Telegram message, retrying in 3s: %v", err)
+						time.Sleep(3 * time.Second)
+						continue
+					}
+					break
+				}
+			}
+		}
+	}()
+
 	go func() {
 		for {
 			select {
@@ -21,7 +54,7 @@ func startAlarmStream(ctx context.Context, client pb.MonitorServiceClient, bot *
 			default:
 			}
 
-			if err := processStream(ctx, client, bot); err != nil {
+			if err := processStream(ctx, client, inpChan); err != nil {
 				log.Printf("⚠️ Stream connection issue: %v. Reconnecting in 5s...", err)
 			}
 
@@ -30,7 +63,7 @@ func startAlarmStream(ctx context.Context, client pb.MonitorServiceClient, bot *
 	}()
 }
 
-func processStream(ctx context.Context, client pb.MonitorServiceClient, bot *tgbotapi.BotAPI) error {
+func processStream(ctx context.Context, client pb.MonitorServiceClient, inpChan chan<- tgbotapi.Chattable) error {
 	streamCtx, cancel := context.WithCancel(ctx)
 	defer cancel() // Ресурсы освободятся ровно при завершении processStream
 
@@ -48,7 +81,7 @@ func processStream(ctx context.Context, client pb.MonitorServiceClient, bot *tgb
 		}
 
 		msg := tgbotapi.NewMessage(chatID, event.Message)
-		bot.Send(msg)
+		inpChan <- msg
 	}
 }
 
