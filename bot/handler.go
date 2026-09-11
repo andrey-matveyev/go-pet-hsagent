@@ -124,10 +124,13 @@ func loadQueueFromFile(q queue.Queue[QueueItem]) {
 	data, err := os.ReadFile(queueFilePath)
 	if err != nil {
 		log.Printf("⚠️ Failed to read queue backup file: %v", err)
+		handleCorruptedFile(queueFilePath, "read error")
 		return
 	}
 
 	if len(data) == 0 {
+		// Пустой файл просто удаляем
+		_ = os.Remove(queueFilePath)
 		return
 	}
 
@@ -138,14 +141,27 @@ func loadQueueFromFile(q queue.Queue[QueueItem]) {
 	})
 
 	if err != nil {
-		log.Printf("⚠️ Failed to import queue from backup: %v", err)
+		log.Printf("❌ CRITICAL: Failed to import/unmarshal queue backup file (corrupted data): %v", err)
+		handleCorruptedFile(queueFilePath, "unmarshal error")
 		return
 	}
 
 	log.Printf("📦 Successfully restored %d pending messages from disk queue.", q.Len())
 
-	// Удаляем файл после успешной загрузки в память
-	_ = os.Remove(queueFilePath)
+	// Удаляем успешно прочитанный файл
+	if err := os.Remove(queueFilePath); err != nil {
+		log.Printf("⚠️ Warning: Could not remove processed queue backup file: %v", err)
+	}
+}
+
+// handleCorruptedFile переименовывает битый файл, чтобы он не мешал работе и был доступен для анализа
+func handleCorruptedFile(filePath string, reason string) {
+	corruptedPath := fmt.Sprintf("%s.corrupted_%d", filePath, time.Now().Unix())
+	if err := os.Rename(filePath, corruptedPath); err != nil {
+		log.Printf("❌ Failed to rename corrupted queue file from %s to %s: %v", filePath, corruptedPath, err)
+		return
+	}
+	log.Printf("⚠️ Corrupted queue backup file was renamed to '%s' (reason: %s) for analysis.", corruptedPath, reason)
 }
 
 func saveQueueToFile(q queue.Queue[QueueItem], pendingMsg *QueueItem) {
