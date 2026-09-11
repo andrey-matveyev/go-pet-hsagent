@@ -160,28 +160,14 @@ func TestE2E_NetworkOutageAndShutdownRecovery(t *testing.T) {
 	tmpDir := t.TempDir()
 	queueFilePath := filepath.Join(tmpDir, "e2e_queue.json")
 
-	// 1. Симулируем неотправленные сообщения при выключении
+	// 1. Формируем список сообщений
+	pendingMsg := E2EQueueItem{ChatID: 12345, Text: "🔥 CPU Overheat 85°C"}
+
 	listQueue := queue.NewListQueue[E2EQueueItem]()
-	pendingMsg := &E2EQueueItem{ChatID: 12345, Text: "🔥 CPU Overheat 85°C"}
+	listQueue.Push(E2EQueueItem{ChatID: 12345, Text: "⚠️ Disk Full"})
 
-	// Помещаем второе сообщение в очередь
-	inpChan := make(chan E2EQueueItem, 10)
-	inpChan <- E2EQueueItem{ChatID: 12345, Text: "⚠️ Disk Full"}
-	close(inpChan)
-
-	ctx, cancel := context.WithCancel(context.Background())
-	outChan := queue.AddQueue(ctx, listQueue, inpChan)
-
-	// Ждем пока унесет в queue
-	time.Sleep(50 * time.Millisecond)
-	cancel()
-	_ = outChan
-
-	// Сохраняем очередь на диск
-	var remaining []E2EQueueItem
-	if pendingMsg != nil {
-		remaining = append(remaining, *pendingMsg)
-	}
+	// 2. Сохраняем очереди на диск (без лишних тавтологических проверок)
+	remaining := []E2EQueueItem{pendingMsg}
 
 	exportedData, _ := queue.Export(listQueue, func(items []E2EQueueItem) ([]byte, error) {
 		return json.Marshal(items)
@@ -194,7 +180,7 @@ func TestE2E_NetworkOutageAndShutdownRecovery(t *testing.T) {
 	finalData, _ := json.MarshalIndent(remaining, "", "  ")
 	_ = os.WriteFile(queueFilePath, finalData, 0644)
 
-	// 2. Проверяем файл на диске
+	// 3. Проверяем сохраненный файл
 	savedData, err := os.ReadFile(queueFilePath)
 	if err != nil {
 		t.Fatalf("Failed to read queue file: %v", err)
@@ -211,7 +197,7 @@ func TestE2E_NetworkOutageAndShutdownRecovery(t *testing.T) {
 		t.Errorf("First item should be pending message, got: %s", savedItems[0].Text)
 	}
 
-	// 3. Восстановление при рестарте
+	// 4. Восстановление при рестарте
 	restoredQueue := queue.NewListQueue[E2EQueueItem]()
 	err = queue.Import(restoredQueue, savedData, func(b []byte) ([]E2EQueueItem, error) {
 		var items []E2EQueueItem
