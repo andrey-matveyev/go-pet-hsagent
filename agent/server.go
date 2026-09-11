@@ -19,14 +19,17 @@ type server struct {
 	cpuAlerted  bool
 	diskAlerted map[string]bool
 	isRunning   bool
+
+	// Абстракция для выполнения системных функций
+	sysRunner SystemRunner
 }
 
 // gRPC Метод: Получение системного статуса
 func (s *server) GetBatteryStatus(ctx context.Context, in *pb.GetBatteryStatusRequest) (*pb.GetBatteryStatusResponse, error) {
-	bCap, bStat, _ := getBatteryInfo()
-	cpuTemp, _ := getCpuTemperature()
-	_, sysDiskReport, _ := getDiskUsage("/")
-	_, storageDiskReport, _ := getDiskUsage(s.cfg.Backup.SourceDir)
+	bCap, bStat, _ := s.getBatteryInfo()
+	cpuTemp, _ := s.getCpuTemperature()
+	_, sysDiskReport, _ := s.getDiskUsage("/")
+	_, storageDiskReport, _ := s.getDiskUsage(s.cfg.Backup.SourceDir)
 
 	diskReport := fmt.Sprintf("💻 Системный SSD: %s\n📸 Хранилище Immich: %s", sysDiskReport, storageDiskReport)
 

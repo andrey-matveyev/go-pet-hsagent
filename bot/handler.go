@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"path/filepath"
 	"time"
 
 	pb "go-pet-hsagent/proto/hsagent/v1"
@@ -14,7 +15,13 @@ import (
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
-const queueFilePath = "queue_backup.json"
+// TelegramSender — интерфейс-обертка над tgbotapi.BotAPI для удобного мокинга в тестах
+type TelegramSender interface {
+	Send(c tgbotapi.Chattable) (tgbotapi.Message, error)
+}
+
+// Переменная вместо константы позволяет менять путь к файлу очереди в юнит-тестах
+var queueFilePath = "queue_backup.json"
 
 // QueueItem используется для сериализации/десериализации сообщений очереди в JSON
 type QueueItem struct {
@@ -23,7 +30,8 @@ type QueueItem struct {
 	ParseMode string `json:"parse_mode"`
 }
 
-func startAlarmStream(ctx context.Context, client pb.MonitorServiceClient, bot *tgbotapi.BotAPI) {
+// startAlarmStream принимает интерфейс TelegramSender вместо жесткой зависимости от *tgbotapi.BotAPI
+func startAlarmStream(ctx context.Context, client pb.MonitorServiceClient, bot TelegramSender) {
 	listQueue := queue.NewListQueue[QueueItem]()
 
 	// 1. ЗАГРУЗКА ИЗ ФАЙЛА (при старте)
@@ -49,7 +57,6 @@ func startAlarmStream(ctx context.Context, client pb.MonitorServiceClient, bot *
 
 				// Фиксируем текущее отправляемое сообщение
 				currentMsg := item
-
 				sent := false
 				for !sent {
 					select {
@@ -111,7 +118,6 @@ func startAlarmStream(ctx context.Context, client pb.MonitorServiceClient, bot *
 		if msg, ok := <-pendingMsgChan; ok {
 			pendingMsg = msg
 		}
-
 		saveQueueToFile(listQueue, pendingMsg)
 	}()
 }
@@ -201,7 +207,11 @@ func saveQueueToFile(q queue.Queue[QueueItem], pendingMsg *QueueItem) {
 		return
 	}
 
-	// Безопасная запись на диск
+	dir := filepath.Dir(queueFilePath)
+	if dir != "" && dir != "." {
+		_ = os.MkdirAll(dir, 0755)
+	}
+
 	tmpPath := queueFilePath + ".tmp"
 	if err := os.WriteFile(tmpPath, finalData, 0644); err != nil {
 		log.Printf("❌ Failed to write queue to temp file: %v", err)
@@ -239,47 +249,50 @@ func processStream(ctx context.Context, client pb.MonitorServiceClient, inpChan 
 	}
 }
 
-func startTelegramBotLoop(ctx context.Context, client pb.MonitorServiceClient, bot *tgbotapi.BotAPI) {
-	u := tgbotapi.NewUpdate(0)
-	u.Timeout = 60
+func startTelegramBotLoop(ctx context.Context, client pb.MonitorServiceClient, bot TelegramSender) {
+	// Если передана реальная структура tgbotapi.BotAPI, включаем получение апдейтов
+	if realBot, ok := bot.(*tgbotapi.BotAPI); ok {
+		u := tgbotapi.NewUpdate(0)
+		u.Timeout = 60
 
-	updates := bot.GetUpdatesChan(u)
-	defer bot.StopReceivingUpdates()
+		updates := realBot.GetUpdatesChan(u)
+		defer realBot.StopReceivingUpdates()
 
-	log.Println("🚀 Telegram bot update loop started listening...")
+		log.Println("🚀 Telegram bot update loop started listening...")
 
-	for {
-		select {
-		case <-ctx.Done():
-			log.Println("🛑 Stopping Telegram bot update loop...")
-			return
-
-		case update, ok := <-updates:
-			if !ok {
-				log.Println("⚠️ Telegram updates channel closed.")
+		for {
+			select {
+			case <-ctx.Done():
+				log.Println("🛑 Stopping Telegram bot update loop...")
 				return
-			}
 
-			if update.Message == nil {
-				continue
-			}
+			case update, ok := <-updates:
+				if !ok {
+					log.Println("⚠️ Telegram updates channel closed.")
+					return
+				}
 
-			if update.Message.Chat.ID != chatID {
-				log.Printf("⚠️ Unauthorized access attempt from ChatID: %d, Text: %s",
-					update.Message.Chat.ID, update.Message.Text)
-				continue
-			}
+				if update.Message == nil {
+					continue
+				}
 
-			if !update.Message.IsCommand() {
-				continue
-			}
+				if update.Message.Chat.ID != chatID {
+					log.Printf("⚠️ Unauthorized access attempt from ChatID: %d, Text: %s",
+						update.Message.Chat.ID, update.Message.Text)
+					continue
+				}
 
-			handleCommand(ctx, client, bot, update.Message)
+				if !update.Message.IsCommand() {
+					continue
+				}
+
+				handleCommand(ctx, client, bot, update.Message)
+			}
 		}
 	}
 }
 
-func handleCommand(parentCtx context.Context, client pb.MonitorServiceClient, bot *tgbotapi.BotAPI, msg *tgbotapi.Message) {
+func handleCommand(parentCtx context.Context, client pb.MonitorServiceClient, bot TelegramSender, msg *tgbotapi.Message) {
 	reqCtx, cancel := context.WithTimeout(parentCtx, 5*time.Second)
 	defer cancel()
 

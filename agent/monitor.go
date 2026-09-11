@@ -2,7 +2,6 @@ package main
 
 import (
 	"fmt"
-	"io/ioutil"
 	"strconv"
 	"strings"
 	"syscall"
@@ -11,12 +10,12 @@ import (
 	pb "go-pet-hsagent/proto/hsagent/v1"
 )
 
-func getBatteryInfo() (int, string, error) {
-	capRaw, err := ioutil.ReadFile("/sys/class/power_supply/BAT0/capacity")
+func (s *server) getBatteryInfo() (int, string, error) {
+	capRaw, err := s.sysRunner.ReadFile("/sys/class/power_supply/BAT0/capacity")
 	if err != nil {
 		return 0, "", err
 	}
-	statRaw, err := ioutil.ReadFile("/sys/class/power_supply/BAT0/status")
+	statRaw, err := s.sysRunner.ReadFile("/sys/class/power_supply/BAT0/status")
 	if err != nil {
 		return 0, "", err
 	}
@@ -25,8 +24,8 @@ func getBatteryInfo() (int, string, error) {
 	return capacity, status, nil
 }
 
-func getCpuTemperature() (float64, error) {
-	tempRaw, err := ioutil.ReadFile("/sys/class/thermal/thermal_zone0/temp")
+func (s *server) getCpuTemperature() (float64, error) {
+	tempRaw, err := s.sysRunner.ReadFile("/sys/class/thermal/thermal_zone0/temp")
 	if err != nil {
 		return 0, err
 	}
@@ -37,7 +36,7 @@ func getCpuTemperature() (float64, error) {
 	return float64(tempMillidegrees) / 1000.0, nil
 }
 
-func getDiskUsage(path string) (float64, string, error) {
+func (s *server) getDiskUsage(path string) (float64, string, error) {
 	var stat syscall.Statfs_t
 	err := syscall.Statfs(path, &stat)
 	if err != nil {
@@ -61,7 +60,7 @@ func (s *server) monitorBatteryLoop() {
 			interval = 5 * time.Minute
 		}
 
-		cap, stat, err := getBatteryInfo()
+		cap, stat, err := s.getBatteryInfo()
 		if err == nil {
 			s.mu.Lock()
 			if s.lastCap == 0 {
@@ -100,7 +99,7 @@ func (s *server) monitorCpuLoop() {
 			interval = 2 * time.Minute
 		}
 
-		temp, err := getCpuTemperature()
+		temp, err := s.getCpuTemperature()
 		if err == nil {
 			s.mu.Lock()
 			if temp > s.cfg.Monitoring.CpuTempThreshold {
@@ -143,7 +142,7 @@ func (s *server) monitorDisksLoop() {
 		}
 
 		for name, path := range paths {
-			pct, report, err := getDiskUsage(path)
+			pct, report, err := s.getDiskUsage(path)
 			if err == nil {
 				s.mu.Lock()
 				isAlerted := s.diskAlerted[name]

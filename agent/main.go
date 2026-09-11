@@ -40,7 +40,12 @@ func main() {
 	kaep := keepalive.EnforcementPolicy{MinTime: 5 * time.Second, PermitWithoutStream: true}
 	kasp := keepalive.ServerParameters{Time: 30 * time.Second, Timeout: 5 * time.Second}
 	s := grpc.NewServer(grpc.KeepaliveEnforcementPolicy(kaep), grpc.KeepaliveParams(kasp))
-	srv := &server{cfg: &cfg, eventChan: make(chan *pb.StreamEventsResponse, 20), diskAlerted: make(map[string]bool)}
+	srv := &server{
+		cfg:         &cfg,
+		eventChan:   make(chan *pb.StreamEventsResponse, 20),
+		diskAlerted: make(map[string]bool),
+		sysRunner:   &DefaultSystemRunner{}, // Передаем дефолтную реализацию
+	}
 	pb.RegisterMonitorServiceServer(s, srv)
 
 	go srv.monitorBatteryLoop()

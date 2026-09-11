@@ -3,10 +3,30 @@ package main
 import (
 	"bytes"
 	"context"
+	"io/ioutil"
 	"os/exec"
 	"regexp"
 	"strings"
 )
+
+// SystemRunner абстрагирует консольные команды и работу с файловой системой /sys
+type SystemRunner interface {
+	RunCmdWithContext(ctx context.Context, name string, arg ...string) (string, error)
+	ReadFile(filename string) ([]byte, error)
+}
+
+// DefaultSystemRunner — реализация по умолчанию для работы на реальном Linux сервере
+type DefaultSystemRunner struct{}
+
+func (d *DefaultSystemRunner) RunCmdWithContext(ctx context.Context, name string, arg ...string) (string, error) {
+	cmd := exec.CommandContext(ctx, name, arg...)
+	out, err := cmd.CombinedOutput()
+	return string(out), err
+}
+
+func (d *DefaultSystemRunner) ReadFile(filename string) ([]byte, error) {
+	return ioutil.ReadFile(filename)
+}
 
 func runCmd(name string, args ...string) (string, error) {
 	cmd := exec.Command(name, args...)
@@ -17,14 +37,6 @@ func runCmd(name string, args ...string) (string, error) {
 	return strings.TrimSpace(out.String()), err
 }
 
-// Надежная обертка над exec.Command с поддержкой Контекста (таймаутов)
-func runCmdWithContext(ctx context.Context, name string, arg ...string) (string, error) {
-	cmd := exec.CommandContext(ctx, name, arg...)
-	out, err := cmd.CombinedOutput()
-	return string(out), err
-}
-
-// Безопасное извлечение базового имени диска из имени раздела
 func getBaseDevice(devPath string) string {
 	devPath = strings.TrimSpace(devPath)
 	if devPath == "" {
