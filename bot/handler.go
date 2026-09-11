@@ -2,8 +2,10 @@ package main
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"log"
+	"os"
 	"time"
 
 	pb "go-pet-hsagent/proto/hsagent/v1"
@@ -12,40 +14,74 @@ import (
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
 
-// startAlarmStream runs a background goroutine to stream alarms from the gRPC agent
+const queueFilePath = "queue_backup.json"
+
+// QueueItem используется для сериализации/десериализации сообщений очереди в JSON
+type QueueItem struct {
+	ChatID    int64  `json:"chat_id"`
+	Text      string `json:"text"`
+	ParseMode string `json:"parse_mode"`
+}
+
 func startAlarmStream(ctx context.Context, client pb.MonitorServiceClient, bot *tgbotapi.BotAPI) {
-	listQueue := queue.NewListQueue[tgbotapi.Chattable]()
-	inpChan := make(chan tgbotapi.Chattable, 100)
+	listQueue := queue.NewListQueue[QueueItem]()
+
+	// 1. ЗАГРУЗКА ИЗ ФАЙЛА (при старте)
+	loadQueueFromFile(listQueue)
+
+	inpChan := make(chan QueueItem, 100)
 	outChan := queue.AddQueue(ctx, listQueue, inpChan)
 
-	// Worker goroutine responsible for sending messages to Telegram one by one strictly
+	// Канал для передачи не отправленного текущего сообщения назад при завершении
+	pendingMsgChan := make(chan *QueueItem, 1)
+
+	// 2. Worker Goroutine: Отправка сообщений в Telegram
 	go func() {
+		defer close(pendingMsgChan)
 		for {
 			select {
 			case <-ctx.Done():
 				return
-			case msg, ok := <-outChan:
+			case item, ok := <-outChan:
 				if !ok {
 					return
 				}
-				for {
+
+				// Фиксируем текущее отправляемое сообщение
+				currentMsg := item
+
+				sent := false
+				for !sent {
 					select {
 					case <-ctx.Done():
+						// Контекст отменен во время ожидания/повтора отправки
+						pendingMsgChan <- &currentMsg
 						return
 					default:
 					}
 
+					msg := tgbotapi.NewMessage(currentMsg.ChatID, currentMsg.Text)
+					if currentMsg.ParseMode != "" {
+						msg.ParseMode = currentMsg.ParseMode
+					}
+
 					if _, err := bot.Send(msg); err != nil {
 						log.Printf("⚠️ Failed to send Telegram message, retrying in 3s: %v", err)
-						time.Sleep(3 * time.Second)
+						select {
+						case <-time.After(3 * time.Second):
+						case <-ctx.Done():
+							pendingMsgChan <- &currentMsg
+							return
+						}
 						continue
 					}
-					break
+					sent = true
 				}
 			}
 		}
 	}()
 
+	// 3. gRPC Stream Listener Goroutine
 	go func() {
 		for {
 			select {
@@ -58,14 +94,114 @@ func startAlarmStream(ctx context.Context, client pb.MonitorServiceClient, bot *
 				log.Printf("⚠️ Stream connection issue: %v. Reconnecting in 5s...", err)
 			}
 
-			time.Sleep(5 * time.Second)
+			select {
+			case <-time.After(5 * time.Second):
+			case <-ctx.Done():
+				return
+			}
 		}
+	}()
+
+	// 4. СОХРАНЕНИЕ НА ДИСК (при остановке приложения)
+	go func() {
+		<-ctx.Done()
+
+		// Ждем завершения воркера и забираем неотправленное сообщение (если оно было)
+		var pendingMsg *QueueItem
+		if msg, ok := <-pendingMsgChan; ok {
+			pendingMsg = msg
+		}
+
+		saveQueueToFile(listQueue, pendingMsg)
 	}()
 }
 
-func processStream(ctx context.Context, client pb.MonitorServiceClient, inpChan chan<- tgbotapi.Chattable) error {
+func loadQueueFromFile(q queue.Queue[QueueItem]) {
+	if _, err := os.Stat(queueFilePath); os.IsNotExist(err) {
+		return
+	}
+
+	data, err := os.ReadFile(queueFilePath)
+	if err != nil {
+		log.Printf("⚠️ Failed to read queue backup file: %v", err)
+		return
+	}
+
+	if len(data) == 0 {
+		return
+	}
+
+	err = queue.Import(q, data, func(b []byte) ([]QueueItem, error) {
+		var items []QueueItem
+		err := json.Unmarshal(b, &items)
+		return items, err
+	})
+
+	if err != nil {
+		log.Printf("⚠️ Failed to import queue from backup: %v", err)
+		return
+	}
+
+	log.Printf("📦 Successfully restored %d pending messages from disk queue.", q.Len())
+
+	// Удаляем файл после успешной загрузки в память
+	_ = os.Remove(queueFilePath)
+}
+
+func saveQueueToFile(q queue.Queue[QueueItem], pendingMsg *QueueItem) {
+	// Собираем неотправленные элементы
+	var remainingItems []QueueItem
+
+	// Если воркер не успел отправить текущее сообщение, ставим его ПЕРВЫМ в очередь
+	if pendingMsg != nil {
+		remainingItems = append(remainingItems, *pendingMsg)
+	}
+
+	// Экспортируем остальные элементы из структуры очереди с помощью queue.Export
+	exportedData, err := queue.Export(q, func(items []QueueItem) ([]byte, error) {
+		return json.Marshal(items)
+	})
+
+	if err != nil {
+		log.Printf("❌ Failed to export queue: %v", err)
+		return
+	}
+
+	var queueItems []QueueItem
+	if len(exportedData) > 0 {
+		_ = json.Unmarshal(exportedData, &queueItems)
+	}
+
+	// Объединяем текущее неотправленное сообщение и остальные элементы очереди
+	remainingItems = append(remainingItems, queueItems...)
+
+	if len(remainingItems) == 0 {
+		return
+	}
+
+	finalData, err := json.MarshalIndent(remainingItems, "", "  ")
+	if err != nil {
+		log.Printf("❌ Failed to marshal remaining queue items: %v", err)
+		return
+	}
+
+	// Безопасная запись на диск
+	tmpPath := queueFilePath + ".tmp"
+	if err := os.WriteFile(tmpPath, finalData, 0644); err != nil {
+		log.Printf("❌ Failed to write queue to temp file: %v", err)
+		return
+	}
+
+	if err := os.Rename(tmpPath, queueFilePath); err != nil {
+		_ = os.WriteFile(queueFilePath, finalData, 0644)
+	}
+
+	log.Printf("💾 Saved %d unsent messages to disk (%s).", len(remainingItems), queueFilePath)
+}
+
+func processStream(ctx context.Context, client pb.MonitorServiceClient, inpChan chan<- QueueItem) error {
 	streamCtx, cancel := context.WithCancel(ctx)
-	defer cancel() // Ресурсы освободятся ровно при завершении processStream
+	defer cancel()
 
 	log.Println("🔄 Attempting to connect to gRPC alarm stream...")
 	stream, err := client.StreamEvents(streamCtx, &pb.StreamEventsRequest{})
@@ -80,19 +216,18 @@ func processStream(ctx context.Context, client pb.MonitorServiceClient, inpChan 
 			return fmt.Errorf("stream read error: %w", err)
 		}
 
-		msg := tgbotapi.NewMessage(chatID, event.Message)
-		inpChan <- msg
+		inpChan <- QueueItem{
+			ChatID: chatID,
+			Text:   event.Message,
+		}
 	}
 }
 
-// startTelegramBotLoop handles incoming updates and commands from Telegram
 func startTelegramBotLoop(ctx context.Context, client pb.MonitorServiceClient, bot *tgbotapi.BotAPI) {
 	u := tgbotapi.NewUpdate(0)
 	u.Timeout = 60
 
 	updates := bot.GetUpdatesChan(u)
-
-	// Гарантируем остановку получения апдейтов при выходе из функции
 	defer bot.StopReceivingUpdates()
 
 	log.Println("🚀 Telegram bot update loop started listening...")
@@ -113,34 +248,29 @@ func startTelegramBotLoop(ctx context.Context, client pb.MonitorServiceClient, b
 				continue
 			}
 
-			// 🔒 STRICT SECURITY CHECK: Ignore everyone except the owner
 			if update.Message.Chat.ID != chatID {
 				log.Printf("⚠️ Unauthorized access attempt from ChatID: %d, Text: %s",
 					update.Message.Chat.ID, update.Message.Text)
 				continue
 			}
 
-			// Обрабатываем только команды
 			if !update.Message.IsCommand() {
 				continue
 			}
 
-			// Запускаем обработку команды
 			handleCommand(ctx, client, bot, update.Message)
 		}
 	}
 }
 
-// Выносим обработку команд в отдельную функцию для чистоты и удобства defer/timeouts
 func handleCommand(parentCtx context.Context, client pb.MonitorServiceClient, bot *tgbotapi.BotAPI, msg *tgbotapi.Message) {
-	// Ограничиваем время ожидания ответа от gRPC агента 5 секундами
 	reqCtx, cancel := context.WithTimeout(parentCtx, 5*time.Second)
 	defer cancel()
 
 	var text string
 
 	switch msg.Command() {
-	case "status": // /status
+	case "status":
 		res, err := client.GetBatteryStatus(reqCtx, &pb.GetBatteryStatusRequest{})
 		if err != nil {
 			log.Printf("⚠️ GetBatteryStatus RPC error: %v", err)
@@ -153,7 +283,7 @@ func handleCommand(parentCtx context.Context, client pb.MonitorServiceClient, bo
 				res.BatteryStatus, res.BatteryCapacity, res.CpuTemperature, res.DiskUsageInfo)
 		}
 
-	case "test": // /test
+	case "test":
 		res, err := client.TestSystems(reqCtx, &pb.TestSystemsRequest{})
 		if err != nil {
 			log.Printf("⚠️ TestSystems RPC error: %v", err)
@@ -161,7 +291,7 @@ func handleCommand(parentCtx context.Context, client pb.MonitorServiceClient, bo
 		} else {
 			text = res.ResultMessage
 		}
-	case "backup": // /backup
+	case "backup":
 		res, err := client.TriggerBackup(reqCtx, &pb.TriggerBackupRequest{})
 		if err != nil {
 			log.Printf("⚠️ TriggerBackup RPC error: %v", err)

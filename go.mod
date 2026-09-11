@@ -4,7 +4,7 @@ go 1.26.5
 
 require (
 	github.com/BurntSushi/toml v1.6.0
-	github.com/andrey-matveyev/go-library-queue v1.0.0
+	github.com/andrey-matveyev/go-library-queue v1.0.1
 	github.com/go-telegram-bot-api/telegram-bot-api/v5 v5.5.1
 	google.golang.org/grpc v1.83.0
 	google.golang.org/protobuf v1.36.11

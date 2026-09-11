@@ -8,6 +8,7 @@ import (
 	"os/signal"
 	"strconv"
 	"syscall"
+	"time"
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 )
@@ -53,4 +54,8 @@ func main() {
 	// Start processing incoming Telegram chat commands
 	// (Идеально сюда тоже передать ctx, если ваша функция это поддерживает)
 	startTelegramBotLoop(ctx, client, bot)
+
+	// Небольшая задержка перед завершением процесса main для гарантии сброса файла очереди на диск
+	<-ctx.Done()
+	time.Sleep(500 * time.Millisecond)
 }
