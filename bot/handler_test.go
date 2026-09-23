@@ -50,8 +50,8 @@ type MockMonitorClient struct {
 	pb.MonitorServiceClient
 }
 
-func (m *MockMonitorClient) GetBatteryStatus(ctx context.Context, in *pb.GetBatteryStatusRequest, opts ...grpc.CallOption) (*pb.GetBatteryStatusResponse, error) {
-	return &pb.GetBatteryStatusResponse{
+func (m *MockMonitorClient) GetBatteryStatus(ctx context.Context, in *pb.GetSystemStatusRequest, opts ...grpc.CallOption) (*pb.GetSystemStatusResponse, error) {
+	return &pb.GetSystemStatusResponse{
 		BatteryCapacity: 95,
 		BatteryStatus:   "Charging",
 		CpuTemperature:  45.5,

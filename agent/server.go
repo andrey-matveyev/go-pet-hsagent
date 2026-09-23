@@ -25,7 +25,7 @@ type server struct {
 }
 
 // gRPC Метод: Получение системного статуса
-func (s *server) GetBatteryStatus(ctx context.Context, in *pb.GetBatteryStatusRequest) (*pb.GetBatteryStatusResponse, error) {
+func (s *server) GetBatteryStatus(ctx context.Context, in *pb.GetSystemStatusRequest) (*pb.GetSystemStatusResponse, error) {
 	bCap, bStat, _ := s.getBatteryInfo()
 	cpuTemp, _ := s.getCpuTemperature()
 	_, sysDiskReport, _ := s.getDiskUsage("/")
@@ -33,7 +33,7 @@ func (s *server) GetBatteryStatus(ctx context.Context, in *pb.GetBatteryStatusRe
 
 	diskReport := fmt.Sprintf("💻 Системный SSD: %s\n📸 Хранилище Immich: %s", sysDiskReport, storageDiskReport)
 
-	return &pb.GetBatteryStatusResponse{
+	return &pb.GetSystemStatusResponse{
 		BatteryCapacity: int32(bCap),
 		BatteryStatus:   bStat,
 		CpuTemperature:  cpuTemp,

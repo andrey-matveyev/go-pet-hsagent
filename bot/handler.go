@@ -300,7 +300,7 @@ func handleCommand(parentCtx context.Context, client pb.MonitorServiceClient, bo
 
 	switch msg.Command() {
 	case "status":
-		res, err := client.GetBatteryStatus(reqCtx, &pb.GetBatteryStatusRequest{})
+		res, err := client.GetSystemStatus(reqCtx, &pb.GetSystemStatusRequest{})
 		if err != nil {
 			log.Printf("⚠️ GetBatteryStatus RPC error: %v", err)
 			text = "❌ Failed to fetch data from Agent. Please check if the agent binary is running."
@@ -329,12 +329,18 @@ func handleCommand(parentCtx context.Context, client pb.MonitorServiceClient, bo
 			text = res.ResultMessage
 		}
 
+	case "help":
+		text = "📋 **Supported commands:**\n\n" +
+			"/status — Get battery status, CPU temperature, and disk usage\n" +
+			"/test — Run forced system self-test\n" +
+			"/backup — Trigger forced storage backup\n"
+
 	default:
 		text = "❌ **Unknown command.**\n\n" +
 			"📋 **Supported commands:**\n" +
 			"/status — Get battery status, CPU temperature, and disk usage\n" +
 			"/test — Run forced system self-test\n" +
-			"/backup — Trigger forced storage backup"
+			"/backup — Trigger forced storage backup\n"
 	}
 
 	replyMsg := tgbotapi.NewMessage(chatID, text)
