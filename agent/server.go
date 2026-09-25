@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"log"
 	"sync"
+	"time"
 
 	pb "go-pet-hsagent/proto/hsagent/v1"
 )
@@ -25,7 +26,7 @@ type server struct {
 }
 
 // gRPC Метод: Получение системного статуса
-func (s *server) GetBatteryStatus(ctx context.Context, in *pb.GetSystemStatusRequest) (*pb.GetSystemStatusResponse, error) {
+func (s *server) GetSystemStatus(ctx context.Context, in *pb.GetSystemStatusRequest) (*pb.GetSystemStatusResponse, error) {
 	bCap, bStat, _ := s.getBatteryInfo()
 	cpuTemp, _ := s.getCpuTemperature()
 	_, sysDiskReport, _ := s.getDiskUsage("/")
@@ -33,11 +34,15 @@ func (s *server) GetBatteryStatus(ctx context.Context, in *pb.GetSystemStatusReq
 
 	diskReport := fmt.Sprintf("💻 Системный SSD: %s\n📸 Хранилище Immich: %s", sysDiskReport, storageDiskReport)
 
+	// Формируем временные метки
+	now := time.Now().Format(time.RFC3339)
+
 	return &pb.GetSystemStatusResponse{
 		BatteryCapacity: int32(bCap),
 		BatteryStatus:   bStat,
 		CpuTemperature:  cpuTemp,
 		DiskUsageInfo:   diskReport,
+		Timestamp:       now, // Добавленное поле с временной меткой
 	}, nil
 }
 

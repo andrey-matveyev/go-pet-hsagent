@@ -30,3 +30,17 @@ func initGRPCClient() (pb.MonitorServiceClient, *grpc.ClientConn, error) {
 	client := pb.NewMonitorServiceClient(conn)
 	return client, conn, nil
 }
+
+// Обработка команды /status
+func handleStatusCommand(client pb.MonitorServiceClient, chatID int64) {
+	req := &pb.GetSystemStatusRequest{}
+	resp, err := client.GetSystemStatus(context.Background(), req)
+	if err != nil {
+		sendTelegramMessage(chatID, fmt.Sprintf("⚠️ Ошибка получения статуса: %v", err))
+		return
+	}
+
+	// Формируем сообщение с временной меткой в начале
+	message := fmt.Sprintf("⏱️ %s\n\n%s", resp.Timestamp, resp.String())
+	sendTelegramMessage(chatID, message)
+}
