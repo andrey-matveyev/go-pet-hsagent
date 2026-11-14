@@ -308,8 +308,9 @@ func handleCommand(parentCtx context.Context, client pb.MonitorServiceClient, bo
 			text = fmt.Sprintf("📊 **HP 4740s Server Status:**\n\n"+
 				"🔋 **Battery:** %s (%d%%)\n"+
 				"🌡 **CPU Temperature:** %.1f°C\n\n"+
-				"💾 **Disk Usage:**\n%s",
-				res.BatteryStatus, res.BatteryCapacity, res.CpuTemperature, res.DiskUsageInfo)
+				"💾 **Disk Usage:**\n%s\n\n"+
+				"🕒 **Last Update:** %s",
+				res.BatteryStatus, res.BatteryCapacity, res.CpuTemperature, res.DiskUsageInfo, res.Timestamp)
 		}
 
 	case "test":
