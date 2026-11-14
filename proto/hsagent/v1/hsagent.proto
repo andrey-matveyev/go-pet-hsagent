@@ -21,6 +21,7 @@ message GetSystemStatusResponse {
   string battery_status = 2;
   double cpu_temperature = 3;
   string disk_usage_info = 4;
+  string timestamp = 5;
 }
 
 // === Request / Response для StreamEvents ===
