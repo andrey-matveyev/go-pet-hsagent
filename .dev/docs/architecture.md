@@ -57,7 +57,9 @@ Defines the gRPC service contract between the Agent and the Bot.
 3.  **Update Bot Handler**: In `bot/handler.go`, add a new `case` in the `switch msg.Command()` block within `handleCommand` to call the new gRPC method and handle the response.
 4.  **Update Help Command**: Update the `help` case in `bot/handler.go` to include the new command in the documentation.
 
-### How to add new information to server responses
-1.  **Update Protobuf**: Add new fields to the appropriate message in `proto/hsagent/v1/hsagent.proto`.
-2.  **Update Agent Server**: In `agent/server.go`, update the implementation of the corresponding gRPC method to populate the new fields.
-3.  **Update Bot Handler**: In `bot/handler.go`, update the `handleCommand` function to include the new information in the Telegram response.
+### How to regenerate Protobuf code
+If you modify the `.proto` files, you must regenerate the Go code using the provided script:
+```bash
+./.dev/cmd/generate_proto.sh
+```
+This script uses `protoc` to generate the necessary `.pb.go` and `_grpc.pb.go` files in the `proto/hsagent/v1/` directory.
