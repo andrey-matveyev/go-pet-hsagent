@@ -1,1 +1,0 @@
-'agent binary':'go build -o ./go-pet-hsagent-agent -v .','bot binary':'go build -o ./go-pet-hsagent-bot -v .','clean':'go clean -i -d'
