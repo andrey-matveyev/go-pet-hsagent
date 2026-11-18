@@ -56,6 +56,7 @@ func (m *MockMonitorClient) GetSystemStatus(ctx context.Context, in *pb.GetSyste
 		BatteryStatus:   "Charging",
 		CpuTemperature:  45.5,
 		DiskUsageInfo:   "💻 System SSD: 20GB free",
+		Timestamp:       "2023-10-27T10:00:00Z",
 	}, nil
 }
 
@@ -175,8 +176,8 @@ func TestHandleCommand_Status(t *testing.T) {
 		t.Fatalf("Expected tgbotapi.MessageConfig type")
 	}
 
-	if !strings.Contains(msgConfig.Text, "95%") || !strings.Contains(msgConfig.Text, "45.5°C") {
-		t.Errorf("Command output missing expected agent metrics: %s", msgConfig.Text)
+	if !strings.Contains(msgConfig.Text, "95%") || !strings.Contains(msgConfig.Text, "45.5°C") || !strings.Contains(msgConfig.Text, "2023-10-27T10:00:00Z") {
+		t.Errorf("Command output missing expected agent metrics or timestamp: %s", msgConfig.Text)
 	}
 }
 
