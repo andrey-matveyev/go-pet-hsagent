@@ -77,7 +77,7 @@ func (s *server) monitorBatteryLoop() {
 			}
 			// Оповещаем при смене статуса подключения зарядки
 			if stat != s.lastStat {
-				msg := "🔌 Зарядное устройство подключено."
+				msg := fmt.Sprintf("🔌 Зарядное устройство подключено (%s).", s.lastStat)
 				if stat == "Discharging" {
 					msg = "🔋 Ноутбук перешел на работу от батареи."
 				}
