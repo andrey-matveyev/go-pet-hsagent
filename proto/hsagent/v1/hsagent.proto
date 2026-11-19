@@ -22,6 +22,14 @@ message GetSystemStatusResponse {
   double cpu_temperature = 3;
   string disk_usage_info = 4;
   string timestamp = 5;
+  MemoryInfo ram = 6;
+  MemoryInfo swap = 7;
+}
+
+message MemoryInfo {
+  double total_bytes = 1;
+  double used_bytes = 2;
+  double usage_pct = 3;
 }
 
 // === Request / Response для StreamEvents ===

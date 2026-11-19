@@ -305,12 +305,20 @@ func handleCommand(parentCtx context.Context, client pb.MonitorServiceClient, bo
 			log.Printf("⚠️ GetBatteryStatus RPC error: %v", err)
 			text = "❌ Failed to fetch data from Agent. Please check if the agent binary is running."
 		} else {
+			var memText string
+			if res.Ram != nil && res.Swap != nil {
+				memText = fmt.Sprintf("🧠 **RAM:** %.1f GB / %.1f GB (%.1f%%)\n💾 **Swap:** %.1f GB / %.1f GB (%.1f%%)\n",
+					res.Ram.UsedBytes/(1024*1024*1024), res.Ram.TotalBytes/(1024*1024*1024), res.Ram.UsagePct,
+					res.Swap.UsedBytes/(1024*1024*1024), res.Swap.TotalBytes/(1024*1024*1024), res.Swap.UsagePct)
+			}
+
 			text = fmt.Sprintf("📊 **HP 4740s Server Status:**\n\n"+
 				"🔋 **Battery:** %s (%d%%)\n"+
 				"🌡 **CPU Temperature:** %.1f°C\n\n"+
+				"💿 **Memory:**\n%s"+
 				"💾 **Disk Usage:**\n%s\n\n"+
 				"🕒 **Last Update:** %s",
-				res.BatteryStatus, res.BatteryCapacity, res.CpuTemperature, res.DiskUsageInfo, res.Timestamp)
+				res.BatteryStatus, res.BatteryCapacity, res.CpuTemperature, memText, res.DiskUsageInfo, res.Timestamp)
 		}
 
 	case "test":
@@ -332,14 +340,14 @@ func handleCommand(parentCtx context.Context, client pb.MonitorServiceClient, bo
 
 	case "help":
 		text = "📋 **Supported commands:**\n\n" +
-			"/status — Get battery status, CPU temperature, and disk usage\n" +
+			"/status — Get battery status, CPU temperature, memory, and disk usage\n" +
 			"/test — Run forced system self-test\n" +
 			"/backup — Trigger forced storage backup\n"
 
 	default:
 		text = "❌ **Unknown command.**\n\n" +
 			"📋 **Supported commands:**\n" +
-			"/status — Get battery status, CPU temperature, and disk usage\n" +
+			"/status — Get battery status, CPU temperature, memory, and disk usage\n" +
 			"/test — Run forced system self-test\n" +
 			"/backup — Trigger forced storage backup\n"
 	}
