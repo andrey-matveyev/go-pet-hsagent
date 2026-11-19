@@ -16,7 +16,7 @@ This document defines the mandatory workflow for the AI assistant when performin
 ## 2. Development Workflow
 
 ### 2.1 Branching Strategy
-Every task must be performed in a new, dedicated branch.
+Every task must be performed in a new, dedicated branch. All new branches must be created from the `main` branch.
 - **Naming Convention**:
   - **For GitHub issues**: `issue-<number>-<short-description>` (e.g., `issue-123-add-timestamp`).
   - **For console tasks**: `task-<short-description>` (e.g., `task-fix-tests`).
@@ -52,7 +52,7 @@ Follow the **Conventional Commits** specification:
 #### 3.1.1. Generate a fresh Access Token
 Run your token script to retrieve the current valid installation token:
 ```bash
-  TOKEN=$(python3 get_github_token.py)
+  TOKEN=$(python3 .dev/tmp/get_github_token.py)
 ```
 
 #### 3.1.2. Push using the x-access-token format
@@ -81,3 +81,5 @@ To create a PR using the same $TOKEN, use curl:
 - **Never** commit directly to the main branch.
 - **Never** merge branches yourself.
 - **Always** submit the final result as a Pull Request (PR) on GitHub.
+- If the task is based on a GitHub issue, include a link to the issue in the PR body (e.g., 'Closes #123').
+- After the PR is merged, the local task branch can be deleted.

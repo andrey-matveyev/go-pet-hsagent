@@ -2,10 +2,20 @@ import time
 import jwt
 import requests
 
-APP_ID = 5744773
+APP_ID_PATH = "/home/andrey/projects/ai-assistants/ai-dev-assistant-bot-app-id"
 PRIVATE_KEY_PATH = "/home/andrey/projects/ai-assistants/ai-dev-assistant-bot.2026-11-13.private-key.pem"
 OWNER = "andrey-matveyev"
 REPO = "go-pet-hsagent"
+
+def get_app_id():
+    with open(APP_ID_PATH, 'r') as f:
+        content = f.read().strip()
+        # Extract only digits in case the file contains "App ID: 12345"
+        import re
+        match = re.search(r'\d+', content)
+        if match:
+            return match.group()
+        return content
 
 def generate_jwt():
     with open(PRIVATE_KEY_PATH, 'r') as f:
@@ -14,7 +24,7 @@ def generate_jwt():
     payload = {
         "iat": int(time.time()) - 60,
         "exp": int(time.time()) + (10 * 60),
-        "iss": str(APP_ID),
+        "iss": get_app_id(),
     }
     
     encoded_jwt = jwt.encode(payload, private_key, algorithm="RS256")
