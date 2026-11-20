@@ -41,14 +41,14 @@ func (s *server) GetSystemStatus(ctx context.Context, in *pb.GetSystemStatusRequ
 
 	// Получаем информацию о памяти
 	memInfo, memErr := s.getMemoryInfo()
-	var ramPb, swapPb *pb.GetSystemStatusResponse_MemoryInfo
+	var ramPb, swapPb *pb.MemoryInfo
 	if memErr == nil {
-		ramPb = &pb.GetSystemStatusResponse_MemoryInfo{
+		ramPb = &pb.MemoryInfo{
 			TotalBytes: memInfo.TotalRAMBytes,
 			UsedBytes:  memInfo.UsedRAMBytes,
 			UsagePct:   memInfo.RAMUsagePct,
 		}
-		swapPb = &pb.GetSystemStatusResponse_MemoryInfo{
+		swapPb = &pb.MemoryInfo{
 			TotalBytes: memInfo.TotalSwapBytes,
 			UsedBytes:  memInfo.UsedSwapBytes,
 			UsagePct:   memInfo.SwapUsagePct,
@@ -68,12 +68,12 @@ func (s *server) GetSystemStatus(ctx context.Context, in *pb.GetSystemStatusRequ
 
 // Получение информации о RAM и Swap из /proc/meminfo
 type MemInfo struct {
-	TotalRAMBytes    float64
-	UsedRAMBytes     float64
-	RAMUsagePct      float64
-	TotalSwapBytes   float64
-	UsedSwapBytes    float64
-	SwapUsagePct     float64
+	TotalRAMBytes  float64
+	UsedRAMBytes   float64
+	RAMUsagePct    float64
+	TotalSwapBytes float64
+	UsedSwapBytes  float64
+	SwapUsagePct   float64
 }
 
 func (s *server) getMemoryInfo() (*MemInfo, error) {
@@ -118,12 +118,12 @@ func (s *server) getMemoryInfo() (*MemInfo, error) {
 	}
 
 	return &MemInfo{
-		TotalRAMBytes:   memTotal,
-		UsedRAMBytes:    usedRAM,
-		RAMUsagePct:     ramPct,
-		TotalSwapBytes:  swapTotal,
-		UsedSwapBytes:   usedSwap,
-		SwapUsagePct:    swapPct,
+		TotalRAMBytes:  memTotal,
+		UsedRAMBytes:   usedRAM,
+		RAMUsagePct:    ramPct,
+		TotalSwapBytes: swapTotal,
+		UsedSwapBytes:  usedSwap,
+		SwapUsagePct:   swapPct,
 	}, nil
 }
 
