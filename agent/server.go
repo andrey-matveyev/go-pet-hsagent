@@ -39,6 +39,18 @@ func (s *server) GetSystemStatus(ctx context.Context, in *pb.GetSystemStatusRequ
 	// Формируем временные метки
 	now := time.Now().Format(time.RFC3339)
 
+	// Получаем информацию о загрузке CPU по ядрам
+	cpuUsages, cpuErr := s.getCPUUsage()
+	var cpuUsagePb []*pb.CPUUsage
+	if cpuErr == nil {
+		for _, cu := range cpuUsages {
+			cpuUsagePb = append(cpuUsagePb, &pb.CPUUsage{
+				CoreId:  cu.CoreID,
+				UsagePct: cu.Usage,
+			})
+		}
+	}
+
 	// Получаем информацию о памяти
 	memInfo, memErr := s.getMemoryInfo()
 	var ramPb, swapPb *pb.MemoryInfo
@@ -63,7 +75,71 @@ func (s *server) GetSystemStatus(ctx context.Context, in *pb.GetSystemStatusRequ
 		Timestamp:       now, // Добавленное поле с временной меткой
 		Ram:             ramPb,
 		Swap:            swapPb,
+		CpuUsage:        cpuUsagePb,
 	}, nil
+}
+
+// Получение информации о загрузке CPU по ядрам из /proc/stat
+type CPUCoreUsage struct {
+	CoreID string
+	Usage  float64
+}
+
+func (s *server) getCPUUsage() ([]CPUCoreUsage, error) {
+	readStats := func() (map[string]struct{ idle, total float64 }, error) {
+		data, err := s.sysRunner.ReadFile("/proc/stat")
+		if err != nil {
+			return nil, err
+		}
+		res := make(map[string]struct{ idle, total float64 })
+		for _, line := range strings.Split(string(data), "\n") {
+			if !strings.HasPrefix(line, "cpu") {
+				continue
+			}
+			fields := strings.Fields(line)
+			coreName := fields[0] // "cpu", "cpu0", "cpu1"
+
+			var total float64
+			for _, f := range fields[1:] {
+				v, _ := strconv.ParseFloat(f, 64)
+				total += v
+			}
+			idle, _ := strconv.ParseFloat(fields[4], 64) // idle time
+			res[coreName] = struct{ idle, total float64 }{idle: idle, total: total}
+		}
+		return res, nil
+	}
+
+	stat1, err := readStats()
+	if err != nil {
+		return nil, err
+	}
+	time.Sleep(200 * time.Millisecond) // Короткая пауза между замерами
+	stat2, err := readStats()
+	if err != nil {
+		return nil, err
+	}
+
+	var results []CPUCoreUsage
+	for core, s1 := range stat1 {
+		s2, ok := stat2[core]
+		if !ok {
+			continue
+		}
+		idleDelta := s2.idle - s1.idle
+		totalDelta := s2.total - s1.total
+
+		usage := 0.0
+		if totalDelta > 0 {
+			usage = (1.0 - idleDelta/totalDelta) * 100
+		}
+
+		if core == "cpu" {
+			core = "Overall"
+		}
+		results = append(results, CPUCoreUsage{CoreID: core, Usage: usage})
+	}
+	return results, nil
 }
 
 // Получение информации о RAM и Swap из /proc/meminfo

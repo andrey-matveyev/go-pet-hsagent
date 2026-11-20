@@ -7,6 +7,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	pb "go-pet-hsagent/proto/hsagent/v1"
@@ -312,13 +313,23 @@ func handleCommand(parentCtx context.Context, client pb.MonitorServiceClient, bo
 					res.Swap.UsedBytes/(1024*1024*1024), res.Swap.TotalBytes/(1024*1024*1024), res.Swap.UsagePct)
 			}
 
+			var cpuText string
+			if len(res.CpuUsage) > 0 {
+				var cpuLines []string
+				for _, cu := range res.CpuUsage {
+					cpuLines = append(cpuLines, fmt.Sprintf("\t• %s: %.1f%%", cu.CoreId, cu.UsagePct))
+				}
+				cpuText = "🖥 **CPU Usage:**\n" + strings.Join(cpuLines, "\n") + "\n"
+			}
+
 			text = fmt.Sprintf("📊 **HP 4740s Server Status:**\n\n"+
 				"🔋 **Battery:** %s (%d%%)\n"+
 				"🌡 **CPU Temperature:** %.1f°C\n\n"+
+				"%s"+
 				"💿 **Memory:**\n%s"+
 				"💾 **Disk Usage:**\n%s\n\n"+
 				"🕒 **Last Update:** %s",
-				res.BatteryStatus, res.BatteryCapacity, res.CpuTemperature, memText, res.DiskUsageInfo, res.Timestamp)
+				res.BatteryStatus, res.BatteryCapacity, res.CpuTemperature, cpuText, memText, res.DiskUsageInfo, res.Timestamp)
 		}
 
 	case "test":
@@ -340,14 +351,14 @@ func handleCommand(parentCtx context.Context, client pb.MonitorServiceClient, bo
 
 	case "help":
 		text = "📋 **Supported commands:**\n\n" +
-			"/status — Get battery status, CPU temperature, memory, and disk usage\n" +
+			"/status — Get battery status, CPU temperature, CPU usage per core, memory, and disk usage\n" +
 			"/test — Run forced system self-test\n" +
 			"/backup — Trigger forced storage backup\n"
 
 	default:
 		text = "❌ **Unknown command.**\n\n" +
 			"📋 **Supported commands:**\n" +
-			"/status — Get battery status, CPU temperature, memory, and disk usage\n" +
+			"/status — Get battery status, CPU temperature, CPU usage per core, memory, and disk usage\n" +
 			"/test — Run forced system self-test\n" +
 			"/backup — Trigger forced storage backup\n"
 	}
