@@ -24,6 +24,12 @@ message GetSystemStatusResponse {
   string timestamp = 5;
   MemoryInfo ram = 6;
   MemoryInfo swap = 7;
+  repeated CPUUsage cpu_usage = 8;
+}
+
+message CPUUsage {
+  string core_id = 1;
+  double usage_pct = 2;
 }
 
 message MemoryInfo {
