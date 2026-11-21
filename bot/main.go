@@ -48,8 +48,12 @@ func main() {
 	}
 	defer conn.Close()
 
+	// Формируем сообщения о загрузке/выгрузке с текущим временем
+	startupMsg := fmt.Sprintf("Bot loaded and ready.\n%s", time.Now().Format(time.RFC3339))
+	shutdownMsg := fmt.Sprintf("Bot is shutting down.\n%s", time.Now().Format(time.RFC3339))
+
 	// 🛡️ FAULT TOLERANCE: Передаем ctx первым аргументом
-	startAlarmStream(ctx, client, bot)
+	startAlarmStream(ctx, client, bot, startupMsg, shutdownMsg)
 
 	// Start processing incoming Telegram chat commands
 	// (Идеально сюда тоже передать ctx, если ваша функция это поддерживает)
