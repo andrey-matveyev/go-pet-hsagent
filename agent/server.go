@@ -36,6 +36,9 @@ func (s *server) GetSystemStatus(ctx context.Context, in *pb.GetSystemStatusRequ
 
 	diskReport := fmt.Sprintf("💻 Системный SSD: %s\n📸 Хранилище Immich: %s", sysDiskReport, storageDiskReport)
 
+	// Получаем аптайм сервера
+	uptime, _ := s.getUptime()
+
 	// Формируем временные метки
 	now := time.Now().Format(time.RFC3339)
 
@@ -45,7 +48,7 @@ func (s *server) GetSystemStatus(ctx context.Context, in *pb.GetSystemStatusRequ
 	if cpuErr == nil {
 		for _, cu := range cpuUsages {
 			cpuUsagePb = append(cpuUsagePb, &pb.CPUUsage{
-				CoreId:  cu.CoreID,
+				CoreId:   cu.CoreID,
 				UsagePct: cu.Usage,
 			})
 		}
@@ -76,6 +79,7 @@ func (s *server) GetSystemStatus(ctx context.Context, in *pb.GetSystemStatusRequ
 		Ram:             ramPb,
 		Swap:            swapPb,
 		CpuUsage:        cpuUsagePb,
+		Uptime:          uptime,
 	}, nil
 }
 
@@ -201,6 +205,32 @@ func (s *server) getMemoryInfo() (*MemInfo, error) {
 		UsedSwapBytes:  usedSwap,
 		SwapUsagePct:   swapPct,
 	}, nil
+}
+
+// Получение аптайма сервера из /proc/uptime
+func (s *server) getUptime() (string, error) {
+	data, err := s.sysRunner.ReadFile("/proc/uptime")
+	if err != nil {
+		return "", err
+	}
+	fields := strings.Fields(string(data))
+	if len(fields) == 0 {
+		return "", fmt.Errorf("empty /proc/uptime")
+	}
+	uptimeSeconds, err := strconv.ParseFloat(fields[0], 64)
+	if err != nil {
+		return "", err
+	}
+
+	totalMinutes := int(uptimeSeconds) / 60
+	days := totalMinutes / (24 * 60)
+	hours := (totalMinutes % (24 * 60)) / 60
+	minutes := totalMinutes % 60
+
+	if days > 0 {
+		return fmt.Sprintf("%dd | %dh", days, hours), nil
+	}
+	return fmt.Sprintf("%dh | %dm", hours, minutes), nil
 }
 
 // gRPC Метод: Стрим алармов
