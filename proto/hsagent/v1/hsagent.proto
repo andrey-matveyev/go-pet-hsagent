@@ -25,6 +25,7 @@ message GetSystemStatusResponse {
   MemoryInfo ram = 6;
   MemoryInfo swap = 7;
   repeated CPUUsage cpu_usage = 8;
+  string uptime = 9;
 }
 
 message CPUUsage {
