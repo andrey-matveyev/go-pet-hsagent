@@ -31,12 +31,30 @@ type QueueItem struct {
 	ParseMode string `json:"parse_mode"`
 }
 
+// sendTextMessage отправляет текстовое сообщение в Telegram с ParseMode Markdown
+func sendTextMessage(bot TelegramSender, chatID int64, text string) error {
+	msg := tgbotapi.NewMessage(chatID, text)
+	msg.ParseMode = "Markdown"
+	_, err := bot.Send(msg)
+	return err
+}
+
 // startAlarmStream принимает интерфейс TelegramSender вместо жесткой зависимости от *tgbotapi.BotAPI
-func startAlarmStream(ctx context.Context, client pb.MonitorServiceClient, bot TelegramSender) {
+// startupMsg — сообщение о запуске бота (отправляется перед обработкой очереди)
+// shutdownMsg — сообщение о выгрузке бота (отправляется перед сохранением очереди)
+func startAlarmStream(ctx context.Context, client pb.MonitorServiceClient, bot TelegramSender, startupMsg, shutdownMsg string) {
 	listQueue := queue.NewListQueue[QueueItem]()
 
 	// 1. ЗАГРУЗКА ИЗ ФАЙЛА (при старте)
 	loadQueueFromFile(listQueue)
+
+	// 1.1. СООБЩЕНИЕ О ЗАГРУЗКЕ БОТА (первым делом, до обработки очереди)
+	if startupMsg != "" {
+		if err := sendTextMessage(bot, chatID, startupMsg); err != nil {
+			log.Printf("⚠️ Failed to send startup message, queuing: %v", err)
+			listQueue.Push(QueueItem{ChatID: chatID, Text: startupMsg})
+		}
+	}
 
 	inpChan := make(chan QueueItem, 100)
 	outChan := queue.AddQueue(ctx, listQueue, inpChan)
@@ -113,6 +131,14 @@ func startAlarmStream(ctx context.Context, client pb.MonitorServiceClient, bot T
 	// 4. СОХРАНЕНИЕ НА ДИСК (при остановке приложения)
 	go func() {
 		<-ctx.Done()
+
+		// 4.1. СООБЩЕНИЕ О ВЫГРУЗКЕ БОТА (перед сохранением очереди)
+		if shutdownMsg != "" {
+			if err := sendTextMessage(bot, chatID, shutdownMsg); err != nil {
+				log.Printf("⚠️ Failed to send shutdown message, queuing: %v", err)
+				listQueue.Push(QueueItem{ChatID: chatID, Text: shutdownMsg})
+			}
+		}
 
 		// Ждем завершения воркера и забираем неотправленное сообщение (если оно было)
 		var pendingMsg *QueueItem
