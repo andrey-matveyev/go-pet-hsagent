@@ -20,12 +20,12 @@ message GetSystemStatusResponse {
   int32 battery_capacity = 1;
   string battery_status = 2;
   double cpu_temperature = 3;
-  string disk_usage_info = 4;
   string timestamp = 5;
   MemoryInfo ram = 6;
   MemoryInfo swap = 7;
   repeated CPUUsage cpu_usage = 8;
   string uptime = 9;
+  repeated DiskUsage disks = 10;
 }
 
 message CPUUsage {
@@ -37,6 +37,13 @@ message MemoryInfo {
   double total_bytes = 1;
   double used_bytes = 2;
   double usage_pct = 3;
+}
+
+message DiskUsage {
+  string name = 1;
+  double used_gb = 2;
+  double total_gb = 3;
+  double usage_pct = 4;
 }
 
 // === Request / Response для StreamEvents ===
