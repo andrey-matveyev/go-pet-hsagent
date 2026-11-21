@@ -11,6 +11,11 @@ go build -ldflags="-s -w -X main.version=$VERSION -X main.gitCommit=$COMMIT -X m
 -o bot_bin \
 ./bot
 
+if [ $? -ne 0 ]; then
+    echo "❌ Error: Build failed!" >&2
+    exit 1
+fi
+
 # Проверка того, что ни одна из переменных не осталась unknown
 if [ "$VERSION" = "unknown" ] || [ "$COMMIT" = "unknown" ] || [ "$DATE" = "unknown" ]; then
     echo "❌ Error: One or more build version fields are 'unknown' (VERSION: $VERSION, COMMIT: $COMMIT, DATE: $DATE). Aborting build!" >&2
