@@ -52,7 +52,7 @@ func startAlarmStream(ctx context.Context, client pb.MonitorServiceClient, bot T
 	if startupMsg != "" {
 		if err := sendTextMessage(bot, chatID, startupMsg); err != nil {
 			log.Printf("⚠️ Failed to send startup message, queuing: %v", err)
-			listQueue.Push(QueueItem{ChatID: chatID, Text: startupMsg})
+			listQueue.Push(QueueItem{ChatID: chatID, Text: startupMsg, ParseMode: "Markdown"})
 		}
 	}
 
@@ -136,7 +136,7 @@ func startAlarmStream(ctx context.Context, client pb.MonitorServiceClient, bot T
 		if shutdownMsg != "" {
 			if err := sendTextMessage(bot, chatID, shutdownMsg); err != nil {
 				log.Printf("⚠️ Failed to send shutdown message, queuing: %v", err)
-				listQueue.Push(QueueItem{ChatID: chatID, Text: shutdownMsg})
+				listQueue.Push(QueueItem{ChatID: chatID, Text: shutdownMsg, ParseMode: "Markdown"})
 			}
 		}
 
