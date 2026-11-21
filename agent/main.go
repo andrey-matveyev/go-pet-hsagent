@@ -51,6 +51,7 @@ func main() {
 	go srv.monitorBatteryLoop()
 	go srv.monitorCpuLoop()
 	go srv.monitorDisksLoop()
+	go srv.monitorRebootLoop()
 	go srv.startSchedulerLoop()
 	log.Printf("🚀 Системный gRPC Агент успешно запущен на %s", cfg.ListenAddress)
 
