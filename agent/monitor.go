@@ -36,21 +36,36 @@ func (s *server) getCpuTemperature() (float64, error) {
 	return float64(tempMillidegrees) / 1000.0, nil
 }
 
-func (s *server) getDiskUsage(path string) (float64, string, error) {
+type DiskStat struct {
+	UsedGB   float64
+	TotalGB  float64
+	UsagePct float64 // процент использования
+	FreePct  float64 // процент свободного места
+}
+
+func (s *server) getDiskStat(path string) (*DiskStat, error) {
 	var stat syscall.Statfs_t
 	err := syscall.Statfs(path, &stat)
 	if err != nil {
-		return 0, "", err
+		return nil, err
 	}
 	all := stat.Blocks * uint64(stat.Bsize)
 	free := stat.Bavail * uint64(stat.Bsize)
 	if all == 0 {
-		return 0, "", fmt.Errorf("disk size is 0")
+		return nil, fmt.Errorf("disk size is 0")
 	}
-	percentFree := (float64(free) / float64(all)) * 100.0
+	freePct := (float64(free) / float64(all)) * 100.0
+	usedPct := 100.0 - freePct
 	gbFree := float64(free) / (1024 * 1024 * 1024)
 	gbAll := float64(all) / (1024 * 1024 * 1024)
-	return percentFree, fmt.Sprintf("%.1f ГБ свободно из %.1f ГБ (%.1f%%)", gbFree, gbAll, percentFree), nil
+	gbUsed := gbAll - gbFree
+
+	return &DiskStat{
+		UsedGB:   gbUsed,
+		TotalGB:  gbAll,
+		UsagePct: usedPct,
+		FreePct:  freePct,
+	}, nil
 }
 
 func (s *server) monitorBatteryLoop() {
@@ -142,23 +157,23 @@ func (s *server) monitorDisksLoop() {
 		}
 
 		for name, path := range paths {
-			pct, report, err := s.getDiskUsage(path)
+			disk, err := s.getDiskStat(path)
 			if err == nil {
 				s.mu.Lock()
 				isAlerted := s.diskAlerted[name]
-				if pct < s.cfg.Monitoring.DiskMinFreePercent {
+				if disk.FreePct < s.cfg.Monitoring.DiskMinFreePercent {
 					if !isAlerted {
 						s.eventChan <- &pb.StreamEventsResponse{
 							Type:    "disk",
-							Message: fmt.Sprintf("⚠️ Мало места на диске [%s] (%s): %s", name, path, report),
+							Message: fmt.Sprintf("⚠️ Мало места на диске [%s] (%s): %.1f%% свободно", name, path, disk.FreePct),
 						}
 						s.diskAlerted[name] = true
 					}
 				} else {
-					if isAlerted && pct > s.cfg.Monitoring.DiskMinFreePercent+5.0 {
+					if isAlerted && disk.FreePct > s.cfg.Monitoring.DiskMinFreePercent+5.0 {
 						s.eventChan <- &pb.StreamEventsResponse{
 							Type:    "disk",
-							Message: fmt.Sprintf("✅ Место на диске [%s] восстановилось: %s", name, report),
+							Message: fmt.Sprintf("✅ Место на диске [%s] восстановилось: %.1f%% свободно", name, disk.FreePct),
 						}
 						s.diskAlerted[name] = false
 					}

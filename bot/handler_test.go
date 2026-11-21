@@ -55,8 +55,12 @@ func (m *MockMonitorClient) GetSystemStatus(ctx context.Context, in *pb.GetSyste
 		BatteryCapacity: 95,
 		BatteryStatus:   "Charging",
 		CpuTemperature:  45.5,
-		DiskUsageInfo:   "💻 System SSD: 20GB free",
+		ServerModel:     "TestServer",
 		Timestamp:       "2023-10-27T10:00:00Z",
+		Disks: []*pb.DiskUsage{
+			{Name: "SSD", UsedGb: 50, TotalGb: 100, UsagePct: 50},
+			{Name: "HDD", UsedGb: 200, TotalGb: 500, UsagePct: 40},
+		},
 	}, nil
 }
 

@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -31,10 +32,26 @@ type server struct {
 func (s *server) GetSystemStatus(ctx context.Context, in *pb.GetSystemStatusRequest) (*pb.GetSystemStatusResponse, error) {
 	bCap, bStat, _ := s.getBatteryInfo()
 	cpuTemp, _ := s.getCpuTemperature()
-	_, sysDiskReport, _ := s.getDiskUsage("/")
-	_, storageDiskReport, _ := s.getDiskUsage(s.cfg.Backup.SourceDir)
+	sysDisk, _ := s.getDiskStat("/")
+	storageDisk, _ := s.getDiskStat(s.cfg.Backup.SourceDir)
 
-	diskReport := fmt.Sprintf("💻 Системный SSD: %s\n📸 Хранилище Immich: %s", sysDiskReport, storageDiskReport)
+	var disks []*pb.DiskUsage
+	if sysDisk != nil {
+		disks = append(disks, &pb.DiskUsage{
+			Name:     "SSD",
+			UsedGb:   sysDisk.UsedGB,
+			TotalGb:  sysDisk.TotalGB,
+			UsagePct: sysDisk.UsagePct,
+		})
+	}
+	if storageDisk != nil {
+		disks = append(disks, &pb.DiskUsage{
+			Name:     "HDD",
+			UsedGb:   storageDisk.UsedGB,
+			TotalGb:  storageDisk.TotalGB,
+			UsagePct: storageDisk.UsagePct,
+		})
+	}
 
 	// Получаем аптайм сервера
 	uptime, _ := s.getUptime()
@@ -74,12 +91,13 @@ func (s *server) GetSystemStatus(ctx context.Context, in *pb.GetSystemStatusRequ
 		BatteryCapacity: int32(bCap),
 		BatteryStatus:   bStat,
 		CpuTemperature:  cpuTemp,
-		DiskUsageInfo:   diskReport,
-		Timestamp:       now, // Добавленное поле с временной меткой
+		Timestamp:       now,
+		Disks:           disks,
 		Ram:             ramPb,
 		Swap:            swapPb,
 		CpuUsage:        cpuUsagePb,
 		Uptime:          uptime,
+		ServerModel:     getServerModel(),
 	}, nil
 }
 
@@ -228,9 +246,19 @@ func (s *server) getUptime() (string, error) {
 	minutes := totalMinutes % 60
 
 	if days > 0 {
-		return fmt.Sprintf("%dd | %dh", days, hours), nil
+		return fmt.Sprintf("%dd / %dh", days, hours), nil
 	}
-	return fmt.Sprintf("%dh | %dm", hours, minutes), nil
+	return fmt.Sprintf("%dh / %dm", hours, minutes), nil
+}
+
+// getServerModel читает актуальную модель железа из DMI (Linux)
+func getServerModel() string {
+	data, err := os.ReadFile("/sys/class/dmi/id/product_name")
+	if err != nil {
+		log.Printf("⚠️ Не удалось прочитать модель сервера из DMI: %v", err)
+		return ""
+	}
+	return strings.TrimSpace(string(data))
 }
 
 // gRPC Метод: Стрим алармов

@@ -303,40 +303,45 @@ func handleCommand(parentCtx context.Context, client pb.MonitorServiceClient, bo
 	case "status":
 		res, err := client.GetSystemStatus(reqCtx, &pb.GetSystemStatusRequest{})
 		if err != nil {
-			log.Printf("⚠️ GetBatteryStatus RPC error: %v", err)
+			log.Printf("⚠️ GetSystemStatus RPC error: %v", err)
 			text = "❌ Failed to fetch data from Agent. Please check if the agent binary is running."
 		} else {
-			var uptimeText string
+			var uptimeLine string
 			if res.Uptime != "" {
-				uptimeText = fmt.Sprintf("• Uptime: %s\n", res.Uptime)
+				uptimeLine = fmt.Sprintf("• Uptime: %s", res.Uptime)
 			}
 
-			var memText string
-			if res.Ram != nil && res.Swap != nil {
-				memText = fmt.Sprintf("🧠 **RAM:** %.1f GB / %.1f GB (%.1f%%)\n💾 **Swap:** %.1f GB / %.1f GB (%.1f%%)\n",
-					res.Ram.UsedBytes/(1024*1024*1024), res.Ram.TotalBytes/(1024*1024*1024), res.Ram.UsagePct,
-					res.Swap.UsedBytes/(1024*1024*1024), res.Swap.TotalBytes/(1024*1024*1024), res.Swap.UsagePct)
-			}
+			batteryLine := fmt.Sprintf("• Battery: %d%% (%s)", res.BatteryCapacity, res.BatteryStatus)
 
-			var cpuText string
-			if len(res.CpuUsage) > 0 {
-				var cpuLines []string
-				for _, cu := range res.CpuUsage {
-					cpuLines = append(cpuLines, fmt.Sprintf("\t• %s: %.1f%%", cu.CoreId, cu.UsagePct))
+			// Find overall CPU usage and temperature
+			var overallCpuUsage float64
+			var coreUsages []float64
+			for _, cu := range res.CpuUsage {
+				if cu.CoreId == "Overall" {
+					overallCpuUsage = cu.UsagePct
+				} else {
+					coreUsages = append(coreUsages, cu.UsagePct)
 				}
-				cpuText = "🖥 **CPU Usage:**\n" + strings.Join(cpuLines, "\n") + "\n"
+			}
+			cpuLine := fmt.Sprintf("• Overall (%%): %.1f (%.1f°C)", overallCpuUsage, res.CpuTemperature)
+			coresLine := fmt.Sprintf("• Cores (%%): [ %s ]", formatCoreUsages(coreUsages))
+
+			var ramLine, swapLine string
+			if res.Ram != nil {
+				ramLine = fmt.Sprintf("• RAM (GB): %.1f / %.1f (%.1f%%)", res.Ram.UsedBytes/(1024*1024*1024), res.Ram.TotalBytes/(1024*1024*1024), res.Ram.UsagePct)
+			}
+			if res.Swap != nil {
+				swapLine = fmt.Sprintf("• Swap (GB): %.1f / %.1f (%.1f%%)", res.Swap.UsedBytes/(1024*1024*1024), res.Swap.TotalBytes/(1024*1024*1024), res.Swap.UsagePct)
 			}
 
-			text = fmt.Sprintf("📊 **HP 4740s Server Status:**\n%s\n\n"+
-				"🔋 **Battery:** %s (%d%%)\n"+
-				"🌡 **CPU Temperature:** %.1f°C\n\n"+
-				"%s"+
-				"💿 **Memory:**\n%s"+
-				"💾 **Disk Usage:**\n%s\n\n"+
-				"🕒 **Last Update:** %s",
-				uptimeText, res.BatteryStatus, res.BatteryCapacity, res.CpuTemperature, cpuText, memText, res.DiskUsageInfo, res.Timestamp)
-		}
+			var diskLines []string
+			for _, d := range res.Disks {
+				diskLines = append(diskLines, fmt.Sprintf("• %s (GB): %.0f / %.0f (%.1f%%)", d.Name, d.UsedGb, d.TotalGb, d.UsagePct))
+			}
 
+			text = fmt.Sprintf("%s Server Status::\n%s\n%s\n\nCPU Usage:\n%s\n%s\n\nMemory Usage:\n%s\n%s\n\nDisk Usage:\n%s\n\n%s",
+					res.ServerModel, uptimeLine, batteryLine, cpuLine, coresLine, ramLine, swapLine, strings.Join(diskLines, "\n"), res.Timestamp)
+		}
 	case "test":
 		res, err := client.TestSystems(reqCtx, &pb.TestSystemsRequest{})
 		if err != nil {
@@ -373,4 +378,16 @@ func handleCommand(parentCtx context.Context, client pb.MonitorServiceClient, bo
 	if _, err := bot.Send(replyMsg); err != nil {
 		log.Printf("⚠️ Failed to send Telegram response: %v", err)
 	}
+}
+
+// formatCoreUsages formats a slice of CPU core usage values as a string like "[ 15 / 8 / 20 / 5 ]"
+func formatCoreUsages(usages []float64) string {
+	if len(usages) == 0 {
+		return ""
+	}
+	parts := make([]string, len(usages))
+	for i, u := range usages {
+		parts[i] = fmt.Sprintf("%.0f", u)
+	}
+	return strings.Join(parts, " / ")
 }
