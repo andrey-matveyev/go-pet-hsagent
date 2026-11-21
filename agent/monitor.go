@@ -143,7 +143,10 @@ func (s *server) monitorCpuLoop() {
 
 func (s *server) monitorRebootLoop() {
 	for {
-		interval := 5 * time.Minute
+		interval := time.Duration(s.cfg.Monitoring.RebootIntervalMin) * time.Minute
+		if interval == 0 {
+			interval = time.Hour
+		}
 		required, pkgs := needsReboot()
 		if required {
 			msg := "⚠️ Требуется перезагрузка сервера после обновления системы."
