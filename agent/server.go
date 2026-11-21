@@ -87,6 +87,8 @@ func (s *server) GetSystemStatus(ctx context.Context, in *pb.GetSystemStatusRequ
 		}
 	}
 
+	rebootRequired, _ := needsReboot()
+
 	return &pb.GetSystemStatusResponse{
 		BatteryCapacity: int32(bCap),
 		BatteryStatus:   bStat,
@@ -98,6 +100,7 @@ func (s *server) GetSystemStatus(ctx context.Context, in *pb.GetSystemStatusRequ
 		CpuUsage:        cpuUsagePb,
 		Uptime:          uptime,
 		ServerModel:     getServerModel(),
+		RebootRequired:  rebootRequired,
 	}, nil
 }
 
@@ -296,5 +299,23 @@ func (s *server) TriggerBackup(ctx context.Context, in *pb.TriggerBackupRequest)
 
 	return &pb.TriggerBackupResponse{
 		ResultMessage: "🚀 Запущен принудительный бэкап хранилища по команде из Telegram.",
+	}, nil
+}
+
+// gRPC Метод: Перезагрузка сервера (/reboot)
+func (s *server) Reboot(ctx context.Context, in *pb.RebootRequest) (*pb.RebootResponse, error) {
+	log.Println("🔄 Получена команда из Telegram на перезагрузку сервера...")
+
+	go func() {
+		out, err := s.sysRunner.RunCmdWithContext(ctx, "sudo", "/sbin/shutdown", "-r", "+1", "Reboot requested via Telegram Bot")
+		if err != nil {
+			log.Printf("❌ Ошибка при выполнении перезагрузки: %v, output: %s", err, out)
+		} else {
+			log.Printf("✅ Команда перезагрузки выполнена: %s", out)
+		}
+	}()
+
+	return &pb.RebootResponse{
+		ResultMessage: "🔄 Перезагрузка сервера инициирована через Telegram (через 1 минуту).",
 	}, nil
 }

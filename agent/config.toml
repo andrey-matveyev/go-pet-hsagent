@@ -16,6 +16,7 @@ schedule_time = "05:00"
 battery_interval_min = 5
 cpu_interval_min = 5
 disk_interval_min = 60
+reboot_interval_min = 60
 
 cpu_temp_threshold = 85.0
 disk_min_free_percent = 10.0

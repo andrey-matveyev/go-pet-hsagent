@@ -8,6 +8,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"sync"
 	"time"
 
 	pb "go-pet-hsagent/proto/hsagent/v1"
@@ -31,12 +32,62 @@ type QueueItem struct {
 	ParseMode string `json:"parse_mode"`
 }
 
+// rebootConfirmationPending отслеживает чаты, ожидающие подтверждения перезагрузки
+var rebootConfirmationPending = make(map[int64]bool)
+var rebootConfirmationMu sync.Mutex
+
 // sendTextMessage отправляет текстовое сообщение в Telegram с ParseMode Markdown
 func sendTextMessage(bot TelegramSender, chatID int64, text string) error {
 	msg := tgbotapi.NewMessage(chatID, text)
 	msg.ParseMode = "Markdown"
 	_, err := bot.Send(msg)
 	return err
+}
+
+// handleRebootConfirmation обрабатывает ответ пользователя на запрос подтверждения перезагрузки
+func handleRebootConfirmation(bot TelegramSender, msg *tgbotapi.Message) {
+	rebootConfirmationMu.Lock()
+	_, pending := rebootConfirmationPending[msg.Chat.ID]
+	rebootConfirmationMu.Unlock()
+
+	if !pending {
+		return
+	}
+
+	text := strings.TrimSpace(msg.Text)
+	lowerText := strings.ToLower(text)
+
+	switch lowerText {
+	case "да", "yes", "y", "д":
+		rebootConfirmationMu.Lock()
+		delete(rebootConfirmationPending, msg.Chat.ID)
+		rebootConfirmationMu.Unlock()
+
+		replyMsg := tgbotapi.NewMessage(msg.Chat.ID, "🔄 Перезагрузка сервера инициирована (через 1 минуту).")
+		replyMsg.ParseMode = "Markdown"
+		if _, err := bot.Send(replyMsg); err != nil {
+			log.Printf("⚠️ Failed to send reboot confirmation response: %v", err)
+		}
+
+	case "отмена", "no", "n", "отм", "cancel":
+		rebootConfirmationMu.Lock()
+		delete(rebootConfirmationPending, msg.Chat.ID)
+		rebootConfirmationMu.Unlock()
+
+		replyMsg := tgbotapi.NewMessage(msg.Chat.ID, "❌ Перезагрузка отменена.")
+		replyMsg.ParseMode = "Markdown"
+		if _, err := bot.Send(replyMsg); err != nil {
+			log.Printf("⚠️ Failed to send reboot cancellation response: %v", err)
+		}
+
+	default:
+		// Неизвестный ответ, напоминаем что ожидается
+		replyMsg := tgbotapi.NewMessage(msg.Chat.ID, "⚠️ Пожалуйста, ответьте 'Да' или 'Отмена'.")
+		replyMsg.ParseMode = "Markdown"
+		if _, err := bot.Send(replyMsg); err != nil {
+			log.Printf("⚠️ Failed to send reboot reminder: %v", err)
+		}
+	}
 }
 
 // startAlarmStream принимает интерфейс TelegramSender вместо жесткой зависимости от *tgbotapi.BotAPI
@@ -309,7 +360,9 @@ func startTelegramBotLoop(ctx context.Context, client pb.MonitorServiceClient, b
 					continue
 				}
 
+				// Обработка подтверждения перезагрузки (не команда, но ждем ответа Да/Отмена)
 				if !update.Message.IsCommand() {
+					handleRebootConfirmation(bot, update.Message)
 					continue
 				}
 
@@ -339,6 +392,13 @@ func handleCommand(parentCtx context.Context, client pb.MonitorServiceClient, bo
 
 			batteryLine := fmt.Sprintf("• Battery: %d%% (%s)", res.BatteryCapacity, res.BatteryStatus)
 
+			var rebootLine string
+			if res.RebootRequired {
+				rebootLine = "• Reboot required: YES"
+			} else {
+				rebootLine = "• Reboot required: NO"
+			}
+
 			// Find overall CPU usage and temperature
 			var overallCpuUsage float64
 			var coreUsages []float64
@@ -365,8 +425,8 @@ func handleCommand(parentCtx context.Context, client pb.MonitorServiceClient, bo
 				diskLines = append(diskLines, fmt.Sprintf("• %s (GB): %.0f / %.0f (%.1f%%)", d.Name, d.UsedGb, d.TotalGb, d.UsagePct))
 			}
 
-			text = fmt.Sprintf("%s Server Status::\n%s\n%s\n\nCPU Usage:\n%s\n%s\n\nMemory Usage:\n%s\n%s\n\nDisk Usage:\n%s\n\n%s",
-					res.ServerModel, uptimeLine, batteryLine, cpuLine, coresLine, ramLine, swapLine, strings.Join(diskLines, "\n"), res.Timestamp)
+			text = fmt.Sprintf("%s Server Status::\n%s\n%s\n%s\n\nCPU Usage:\n%s\n%s\n\nMemory Usage:\n%s\n%s\n\nDisk Usage:\n%s\n\n%s",
+					res.ServerModel, uptimeLine, batteryLine, rebootLine, cpuLine, coresLine, ramLine, swapLine, strings.Join(diskLines, "\n"), res.Timestamp)
 		}
 	case "test":
 		res, err := client.TestSystems(reqCtx, &pb.TestSystemsRequest{})
@@ -385,18 +445,31 @@ func handleCommand(parentCtx context.Context, client pb.MonitorServiceClient, bo
 			text = res.ResultMessage
 		}
 
+	case "reboot":
+		rebootConfirmationMu.Lock()
+		if rebootConfirmationPending[chatID] {
+			rebootConfirmationMu.Unlock()
+			text = "⚠️ Подтверждение перезагрузки уже ожидается. Ответьте 'Да' или 'Отмена'."
+		} else {
+			rebootConfirmationPending[chatID] = true
+			rebootConfirmationMu.Unlock()
+			text = "⚠️ Вы уверены, что хотите перезагрузить сервер? Ответьте 'Да' или 'Отмена'."
+		}
+
 	case "help":
 		text = "📋 **Supported commands:**\n\n" +
 			"/status — Get battery status, CPU temperature, CPU usage per core, memory, disk usage, and uptime\n" +
 			"/test — Run forced system self-test\n" +
-			"/backup — Trigger forced storage backup\n"
+			"/backup — Trigger forced storage backup\n" +
+			"/reboot — Reboot the server (requires confirmation)\n"
 
 	default:
 		text = "❌ **Unknown command.**\n\n" +
 			"📋 **Supported commands:**\n" +
 			"/status — Get battery status, CPU temperature, CPU usage per core, memory, and disk usage\n" +
 			"/test — Run forced system self-test\n" +
-			"/backup — Trigger forced storage backup\n"
+			"/backup — Trigger forced storage backup\n" +
+			"/reboot — Reboot the server (requires confirmation)\n"
 	}
 
 	replyMsg := tgbotapi.NewMessage(chatID, text)

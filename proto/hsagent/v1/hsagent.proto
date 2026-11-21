@@ -11,6 +11,7 @@ service MonitorService {
   rpc StreamEvents(StreamEventsRequest) returns (stream StreamEventsResponse);
   rpc TestSystems(TestSystemsRequest) returns (TestSystemsResponse);
   rpc TriggerBackup(TriggerBackupRequest) returns (TriggerBackupResponse);
+  rpc Reboot(RebootRequest) returns (RebootResponse);
 }
 
 // === Request / Response для GetBatteryStatus ===
@@ -27,6 +28,7 @@ message GetSystemStatusResponse {
   string uptime = 9;
   repeated DiskUsage disks = 10;
   string server_model = 11;
+  bool reboot_required = 12;
 }
 
 message CPUUsage {
@@ -66,5 +68,12 @@ message TestSystemsResponse {
 message TriggerBackupRequest {}
 
 message TriggerBackupResponse {
+  string result_message = 1;
+}
+
+// === Request / Response для Reboot ===
+message RebootRequest {}
+
+message RebootResponse {
   string result_message = 1;
 }

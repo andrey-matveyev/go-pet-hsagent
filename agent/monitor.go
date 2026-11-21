@@ -2,6 +2,7 @@ package main
 
 import (
 	"fmt"
+	"os"
 	"strconv"
 	"strings"
 	"syscall"
@@ -138,6 +139,35 @@ func (s *server) monitorCpuLoop() {
 		}
 		time.Sleep(interval)
 	}
+}
+
+func (s *server) monitorRebootLoop() {
+	for {
+		interval := time.Duration(s.cfg.Monitoring.RebootIntervalMin) * time.Minute
+		if interval == 0 {
+			interval = time.Hour
+		}
+		required, pkgs := needsReboot()
+		if required {
+			msg := "⚠️ Требуется перезагрузка сервера после обновления системы."
+			if len(pkgs) > 0 {
+				msg += fmt.Sprintf("\nПакеты: %s", strings.Join(pkgs, ", "))
+			}
+			s.eventChan <- &pb.StreamEventsResponse{
+				Type:    "reboot_required",
+				Message: msg,
+			}
+		}
+		time.Sleep(interval)
+	}
+}
+
+func needsReboot() (bool, []string) {
+	if _, err := os.Stat("/var/run/reboot-required"); err == nil {
+		pkgs, _ := os.ReadFile("/var/run/reboot-required.pkgs")
+		return true, strings.Split(string(pkgs), "\n")
+	}
+	return false, nil
 }
 
 func (s *server) monitorDisksLoop() {
