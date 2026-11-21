@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"os"
 	"strconv"
 	"strings"
 	"sync"
@@ -96,6 +97,7 @@ func (s *server) GetSystemStatus(ctx context.Context, in *pb.GetSystemStatusRequ
 		Swap:            swapPb,
 		CpuUsage:        cpuUsagePb,
 		Uptime:          uptime,
+		ServerModel:     getServerModel(),
 	}, nil
 }
 
@@ -247,6 +249,16 @@ func (s *server) getUptime() (string, error) {
 		return fmt.Sprintf("%dd / %dh", days, hours), nil
 	}
 	return fmt.Sprintf("%dh / %dm", hours, minutes), nil
+}
+
+// getServerModel читает актуальную модель железа из DMI (Linux)
+func getServerModel() string {
+	data, err := os.ReadFile("/sys/class/dmi/id/product_name")
+	if err != nil {
+		log.Printf("⚠️ Не удалось прочитать модель сервера из DMI: %v", err)
+		return ""
+	}
+	return strings.TrimSpace(string(data))
 }
 
 // gRPC Метод: Стрим алармов

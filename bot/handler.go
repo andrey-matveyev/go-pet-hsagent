@@ -339,8 +339,8 @@ func handleCommand(parentCtx context.Context, client pb.MonitorServiceClient, bo
 				diskLines = append(diskLines, fmt.Sprintf("• %s (GB): %.0f / %.0f (%.1f%%)", d.Name, d.UsedGb, d.TotalGb, d.UsagePct))
 			}
 
-			text = fmt.Sprintf("HP 4740s Server Status::\n%s\n%s\n\nCPU Usage:\n%s\n%s\n\nMemory Usage:\n%s\n%s\n\nDisk Usage:\n%s\n\n%s",
-					uptimeLine, batteryLine, cpuLine, coresLine, ramLine, swapLine, strings.Join(diskLines, "\n"), res.Timestamp)
+			text = fmt.Sprintf("%s Server Status::\n%s\n%s\n\nCPU Usage:\n%s\n%s\n\nMemory Usage:\n%s\n%s\n\nDisk Usage:\n%s\n\n%s",
+					res.ServerModel, uptimeLine, batteryLine, cpuLine, coresLine, ramLine, swapLine, strings.Join(diskLines, "\n"), res.Timestamp)
 		}
 	case "test":
 		res, err := client.TestSystems(reqCtx, &pb.TestSystemsRequest{})

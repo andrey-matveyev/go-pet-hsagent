@@ -26,6 +26,7 @@ message GetSystemStatusResponse {
   repeated CPUUsage cpu_usage = 8;
   string uptime = 9;
   repeated DiskUsage disks = 10;
+  string server_model = 11;
 }
 
 message CPUUsage {

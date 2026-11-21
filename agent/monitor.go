@@ -173,7 +173,7 @@ func (s *server) monitorDisksLoop() {
 					if isAlerted && disk.FreePct > s.cfg.Monitoring.DiskMinFreePercent+5.0 {
 						s.eventChan <- &pb.StreamEventsResponse{
 							Type:    "disk",
-							Message: fmt.Sprintf("✅ Место на диске [%s] восстановилось: %.1f%% свободно", name, path, disk.FreePct),
+							Message: fmt.Sprintf("✅ Место на диске [%s] восстановилось: %.1f%% свободно", name, disk.FreePct),
 						}
 						s.diskAlerted[name] = false
 					}
