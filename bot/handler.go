@@ -8,7 +8,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 	"time"
 
 	pb "go-pet-hsagent/proto/hsagent/v1"
@@ -32,10 +31,6 @@ type QueueItem struct {
 	ParseMode string `json:"parse_mode"`
 }
 
-// rebootConfirmationPending отслеживает чаты, ожидающие подтверждения перезагрузки
-var rebootConfirmationPending = make(map[int64]bool)
-var rebootConfirmationMu sync.Mutex
-
 // sendTextMessage отправляет текстовое сообщение в Telegram с ParseMode Markdown
 func sendTextMessage(bot TelegramSender, chatID int64, text string) error {
 	msg := tgbotapi.NewMessage(chatID, text)
@@ -44,61 +39,42 @@ func sendTextMessage(bot TelegramSender, chatID int64, text string) error {
 	return err
 }
 
-// handleRebootConfirmation обрабатывает ответ пользователя на запрос подтверждения перезагрузки
-func handleRebootConfirmation(ctx context.Context, client pb.MonitorServiceClient, bot TelegramSender, msg *tgbotapi.Message) {
-	rebootConfirmationMu.Lock()
-	_, pending := rebootConfirmationPending[msg.Chat.ID]
-	rebootConfirmationMu.Unlock()
-
-	if !pending {
-		return
+// handleCallbackQuery обрабатывает нажатия инлайн-кнопок (подтверждение/отмена перезагрузки)
+func handleCallbackQuery(ctx context.Context, client pb.MonitorServiceClient, bot TelegramSender, cq *tgbotapi.CallbackQuery) {
+	// Убираем "часики" с кнопки
+	callback := tgbotapi.NewCallback(cq.ID, "")
+	if _, err := bot.Send(callback); err != nil {
+		log.Printf("⚠️ Failed to answer callback query: %v", err)
 	}
 
-	text := strings.TrimSpace(msg.Text)
-	lowerText := strings.ToLower(text)
-
-	switch lowerText {
-	case "да", "yes", "y", "д":
-		rebootConfirmationMu.Lock()
-		delete(rebootConfirmationPending, msg.Chat.ID)
-		rebootConfirmationMu.Unlock()
-
-		// Инициируем перезагрузку через gRPC
+	switch cq.Data {
+	case "reboot_confirm":
 		_, err := client.Reboot(ctx, &pb.RebootRequest{})
 		if err != nil {
 			log.Printf("❌ gRPC Reboot error: %v", err)
-			replyMsg := tgbotapi.NewMessage(msg.Chat.ID, fmt.Sprintf("❌ Ошибка при инициировании перезагрузки: %v", err))
-			replyMsg.ParseMode = "Markdown"
-			if _, sendErr := bot.Send(replyMsg); sendErr != nil {
+			msg := tgbotapi.NewMessage(cq.Message.Chat.ID, fmt.Sprintf("❌ Ошибка при инициировании перезагрузки: %v", err))
+			msg.ParseMode = "Markdown"
+			if _, sendErr := bot.Send(msg); sendErr != nil {
 				log.Printf("⚠️ Failed to send reboot error response: %v", sendErr)
 			}
 			return
 		}
 
-		replyMsg := tgbotapi.NewMessage(msg.Chat.ID, "🔄 Перезагрузка сервера инициирована (через 1 минуту).")
-		replyMsg.ParseMode = "Markdown"
-		if _, err := bot.Send(replyMsg); err != nil {
+		msg := tgbotapi.NewMessage(cq.Message.Chat.ID, "🔄 Перезагрузка сервера инициирована (через 1 минуту).")
+		msg.ParseMode = "Markdown"
+		if _, err := bot.Send(msg); err != nil {
 			log.Printf("⚠️ Failed to send reboot confirmation response: %v", err)
 		}
 
-	case "отмена", "no", "n", "отм", "cancel":
-		rebootConfirmationMu.Lock()
-		delete(rebootConfirmationPending, msg.Chat.ID)
-		rebootConfirmationMu.Unlock()
-
-		replyMsg := tgbotapi.NewMessage(msg.Chat.ID, "❌ Перезагрузка отменена.")
-		replyMsg.ParseMode = "Markdown"
-		if _, err := bot.Send(replyMsg); err != nil {
+	case "reboot_cancel":
+		msg := tgbotapi.NewMessage(cq.Message.Chat.ID, "❌ Перезагрузка отменена.")
+		msg.ParseMode = "Markdown"
+		if _, err := bot.Send(msg); err != nil {
 			log.Printf("⚠️ Failed to send reboot cancellation response: %v", err)
 		}
 
 	default:
-		// Неизвестный ответ, напоминаем что ожидается
-		replyMsg := tgbotapi.NewMessage(msg.Chat.ID, "⚠️ Пожалуйста, ответьте 'Да' или 'Отмена'.")
-		replyMsg.ParseMode = "Markdown"
-		if _, err := bot.Send(replyMsg); err != nil {
-			log.Printf("⚠️ Failed to send reboot reminder: %v", err)
-		}
+		log.Printf("⚠️ Unknown callback data: %s", cq.Data)
 	}
 }
 
@@ -372,9 +348,14 @@ func startTelegramBotLoop(ctx context.Context, client pb.MonitorServiceClient, b
 					continue
 				}
 
-				// Обработка подтверждения перезагрузки (не команда, но ждем ответа Да/Отмена)
-				if !update.Message.IsCommand() {
-					handleRebootConfirmation(ctx, client, bot, update.Message)
+				// Обработка нажатий инлайн-кнопок (CallbackQuery)
+				if update.CallbackQuery != nil {
+					if update.CallbackQuery.Message.Chat.ID != chatID {
+						log.Printf("⚠️ Unauthorized callback attempt from ChatID: %d, Data: %s",
+							update.CallbackQuery.Message.Chat.ID, update.CallbackQuery.Data)
+						continue
+					}
+					handleCallbackQuery(ctx, client, bot, update.CallbackQuery)
 					continue
 				}
 
@@ -458,15 +439,19 @@ func handleCommand(parentCtx context.Context, client pb.MonitorServiceClient, bo
 		}
 
 	case "reboot":
-		rebootConfirmationMu.Lock()
-		if rebootConfirmationPending[chatID] {
-			rebootConfirmationMu.Unlock()
-			text = "⚠️ Подтверждение перезагрузки уже ожидается. Ответьте 'Да' или 'Отмена'."
-		} else {
-			rebootConfirmationPending[chatID] = true
-			rebootConfirmationMu.Unlock()
-			text = "⚠️ Вы уверены, что хотите перезагрузить сервер? Ответьте 'Да' или 'Отмена'."
+		keyboard := tgbotapi.NewInlineKeyboardMarkup(
+			tgbotapi.NewInlineKeyboardRow(
+				tgbotapi.NewInlineKeyboardButtonData("Да", "reboot_confirm"),
+				tgbotapi.NewInlineKeyboardButtonData("Нет", "reboot_cancel"),
+			),
+		)
+		rebootMsg := tgbotapi.NewMessage(chatID, "⚠️ Вы уверены, что хотите перезагрузить сервер?")
+		rebootMsg.ReplyMarkup = keyboard
+		rebootMsg.ParseMode = "Markdown"
+		if _, err := bot.Send(rebootMsg); err != nil {
+			log.Printf("⚠️ Failed to send reboot confirmation: %v", err)
 		}
+		return
 
 	case "help":
 		text = "📋 **Supported commands:**\n\n" +
