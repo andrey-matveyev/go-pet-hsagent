@@ -22,6 +22,7 @@ type server struct {
 	lastStat    string
 	cpuAlerted  bool
 	diskAlerted map[string]bool
+	rebootAlerted bool
 	isRunning   bool
 
 	// Абстракция для выполнения системных функций
@@ -87,7 +88,7 @@ func (s *server) GetSystemStatus(ctx context.Context, in *pb.GetSystemStatusRequ
 		}
 	}
 
-	rebootRequired, _ := needsReboot()
+	rebootRequired := needsReboot()
 
 	return &pb.GetSystemStatusResponse{
 		BatteryCapacity: int32(bCap),
@@ -374,7 +375,7 @@ func (s *server) Reboot(ctx context.Context, in *pb.RebootRequest) (*pb.RebootRe
 	log.Println("🔄 Получена команда из Telegram на перезагрузку сервера...")
 
 	go func() {
-		out, err := s.sysRunner.RunCmdWithContext(ctx, "sudo", "/sbin/shutdown", "-r", "+1", "Reboot requested via Telegram Bot")
+		out, err := s.sysRunner.RunCmdWithContext(context.Background(), "/sbin/shutdown", "-r", "+1", "Reboot requested via Telegram Bot")
 		if err != nil {
 			log.Printf("❌ Ошибка при выполнении перезагрузки: %v, output: %s", err, out)
 		} else {

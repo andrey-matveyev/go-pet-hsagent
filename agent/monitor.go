@@ -147,27 +147,25 @@ func (s *server) monitorRebootLoop() {
 		if interval == 0 {
 			interval = time.Hour
 		}
-		required, pkgs := needsReboot()
-		if required {
-			msg := "⚠️ Требуется перезагрузка сервера после обновления системы."
-			if len(pkgs) > 0 {
-				msg += fmt.Sprintf("\nПакеты: %s", strings.Join(pkgs, ", "))
-			}
+		required := needsReboot()
+		s.mu.Lock()
+		if required && !s.rebootAlerted {
 			s.eventChan <- &pb.StreamEventsResponse{
 				Type:    "reboot_required",
-				Message: msg,
+				Message: "⚠️ Требуется перезагрузка сервера после обновления системы.",
 			}
+			s.rebootAlerted = true
+		} else if !required && s.rebootAlerted {
+			s.rebootAlerted = false
 		}
+		s.mu.Unlock()
 		time.Sleep(interval)
 	}
 }
 
-func needsReboot() (bool, []string) {
-	if _, err := os.Stat("/var/run/reboot-required"); err == nil {
-		pkgs, _ := os.ReadFile("/var/run/reboot-required.pkgs")
-		return true, strings.Split(string(pkgs), "\n")
-	}
-	return false, nil
+func needsReboot() bool {
+	_, err := os.Stat("/var/run/reboot-required")
+	return err == nil
 }
 
 func (s *server) monitorDisksLoop() {
