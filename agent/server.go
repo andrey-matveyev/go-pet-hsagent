@@ -38,7 +38,7 @@ func (s *server) GetSystemStatus(ctx context.Context, in *pb.GetSystemStatusRequ
 	var disks []*pb.DiskUsage
 	if sysDisk != nil {
 		disks = append(disks, &pb.DiskUsage{
-			Name:     "SSD",
+			Name:     getDiskType("/"),
 			UsedGb:   sysDisk.UsedGB,
 			TotalGb:  sysDisk.TotalGB,
 			UsagePct: sysDisk.UsagePct,
@@ -46,7 +46,7 @@ func (s *server) GetSystemStatus(ctx context.Context, in *pb.GetSystemStatusRequ
 	}
 	if storageDisk != nil {
 		disks = append(disks, &pb.DiskUsage{
-			Name:     "HDD",
+			Name:     getDiskType(s.cfg.Backup.SourceDir),
 			UsedGb:   storageDisk.UsedGB,
 			TotalGb:  storageDisk.TotalGB,
 			UsagePct: storageDisk.UsagePct,
@@ -252,6 +252,73 @@ func (s *server) getUptime() (string, error) {
 		return fmt.Sprintf("%dd / %dh", days, hours), nil
 	}
 	return fmt.Sprintf("%dh / %dm", hours, minutes), nil
+}
+
+// getDiskType определяет тип диска (SSD/HDD) по точке монтирования,
+// читая /sys/block/<device>/queue/rotational.
+func getDiskType(mountPath string) string {
+	data, err := os.ReadFile("/proc/mounts")
+	if err != nil {
+		return "Unknown"
+	}
+
+	var deviceName string
+	for _, line := range strings.Split(string(data), "\n") {
+		fields := strings.Fields(line)
+		if len(fields) < 2 {
+			continue
+		}
+		// fields[0] = устройство, fields[1] = точка монтирования
+		if fields[1] == mountPath {
+			deviceName = fields[0]
+			break
+		}
+	}
+
+	if deviceName == "" {
+		return "Unknown"
+	}
+
+	// Убираем /dev/ префикс
+	deviceName = strings.TrimPrefix(deviceName, "/dev/")
+
+	// Извлекаем базовое имя устройства (убираем номер раздела)
+	baseDevice := extractBaseDevice(deviceName)
+
+	rotationalPath := fmt.Sprintf("/sys/block/%s/queue/rotational", baseDevice)
+	rotRaw, err := os.ReadFile(rotationalPath)
+	if err != nil {
+		return "Unknown"
+	}
+
+	rotational := strings.TrimSpace(string(rotRaw))
+	if rotational == "0" {
+		return "SSD"
+	}
+	return "HDD"
+}
+
+// extractBaseDevice извлекает базовое имя блочного устройства из имени раздела.
+// Например: sda1 -> sda, nvme0n1p1 -> nvme0n1, sda -> sda.
+func extractBaseDevice(device string) string {
+	// Для NVMe устройств: nvme0n1p1 -> nvme0n1
+	if strings.HasPrefix(device, "nvme") {
+		idx := strings.LastIndex(device, "p")
+		if idx > 0 {
+			if _, err := strconv.Atoi(device[idx+1:]); err == nil {
+				return device[:idx]
+			}
+		}
+		return device
+	}
+
+	// Для sdX, hdX, vdX и подобных: убираем trailing digits (sda1 -> sda)
+	for i := len(device) - 1; i >= 0; i-- {
+		if device[i] < '0' || device[i] > '9' {
+			return device[:i+1]
+		}
+	}
+	return device
 }
 
 // getServerModel читает актуальную модель железа из DMI (Linux)
