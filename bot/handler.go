@@ -338,6 +338,21 @@ func startTelegramBotLoop(ctx context.Context, client pb.MonitorServiceClient, b
 					return
 				}
 
+				// Обработка нажатий инлайн-кнопок (CallbackQuery)
+				if update.CallbackQuery != nil {
+					if update.CallbackQuery.Message == nil {
+						log.Printf("⚠️ CallbackQuery without message: %s", update.CallbackQuery.Data)
+						continue
+					}
+					if update.CallbackQuery.Message.Chat.ID != chatID {
+						log.Printf("⚠️ Unauthorized callback attempt from ChatID: %d, Data: %s",
+							update.CallbackQuery.Message.Chat.ID, update.CallbackQuery.Data)
+						continue
+					}
+					handleCallbackQuery(ctx, client, bot, update.CallbackQuery)
+					continue
+				}
+
 				if update.Message == nil {
 					continue
 				}
@@ -345,17 +360,6 @@ func startTelegramBotLoop(ctx context.Context, client pb.MonitorServiceClient, b
 				if update.Message.Chat.ID != chatID {
 					log.Printf("⚠️ Unauthorized access attempt from ChatID: %d, Text: %s",
 						update.Message.Chat.ID, update.Message.Text)
-					continue
-				}
-
-				// Обработка нажатий инлайн-кнопок (CallbackQuery)
-				if update.CallbackQuery != nil {
-					if update.CallbackQuery.Message.Chat.ID != chatID {
-						log.Printf("⚠️ Unauthorized callback attempt from ChatID: %d, Data: %s",
-							update.CallbackQuery.Message.Chat.ID, update.CallbackQuery.Data)
-						continue
-					}
-					handleCallbackQuery(ctx, client, bot, update.CallbackQuery)
 					continue
 				}
 
