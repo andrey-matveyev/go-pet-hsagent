@@ -45,7 +45,7 @@ func sendTextMessage(bot TelegramSender, chatID int64, text string) error {
 }
 
 // handleRebootConfirmation обрабатывает ответ пользователя на запрос подтверждения перезагрузки
-func handleRebootConfirmation(bot TelegramSender, msg *tgbotapi.Message) {
+func handleRebootConfirmation(ctx context.Context, client pb.MonitorServiceClient, bot TelegramSender, msg *tgbotapi.Message) {
 	rebootConfirmationMu.Lock()
 	_, pending := rebootConfirmationPending[msg.Chat.ID]
 	rebootConfirmationMu.Unlock()
@@ -62,6 +62,18 @@ func handleRebootConfirmation(bot TelegramSender, msg *tgbotapi.Message) {
 		rebootConfirmationMu.Lock()
 		delete(rebootConfirmationPending, msg.Chat.ID)
 		rebootConfirmationMu.Unlock()
+
+		// Инициируем перезагрузку через gRPC
+		_, err := client.Reboot(ctx, &pb.RebootRequest{})
+		if err != nil {
+			log.Printf("❌ gRPC Reboot error: %v", err)
+			replyMsg := tgbotapi.NewMessage(msg.Chat.ID, fmt.Sprintf("❌ Ошибка при инициировании перезагрузки: %v", err))
+			replyMsg.ParseMode = "Markdown"
+			if _, sendErr := bot.Send(replyMsg); sendErr != nil {
+				log.Printf("⚠️ Failed to send reboot error response: %v", sendErr)
+			}
+			return
+		}
 
 		replyMsg := tgbotapi.NewMessage(msg.Chat.ID, "🔄 Перезагрузка сервера инициирована (через 1 минуту).")
 		replyMsg.ParseMode = "Markdown"
@@ -362,7 +374,7 @@ func startTelegramBotLoop(ctx context.Context, client pb.MonitorServiceClient, b
 
 				// Обработка подтверждения перезагрузки (не команда, но ждем ответа Да/Отмена)
 				if !update.Message.IsCommand() {
-					handleRebootConfirmation(bot, update.Message)
+					handleRebootConfirmation(ctx, client, bot, update.Message)
 					continue
 				}
 
