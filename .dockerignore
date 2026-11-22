@@ -49,3 +49,7 @@ docker-compose*.yml
 
 # Исключаем документацию и статику
 *.md
+
+# Исключаем тесты
+handler_test.go
+e2e/
