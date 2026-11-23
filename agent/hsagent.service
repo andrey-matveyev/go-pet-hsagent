@@ -6,6 +6,9 @@ After=network.target
 Type=simple
 User=root
 WorkingDirectory=/opt/homemonitor
+# Отключаем USB-порт бэкапа до старта агента, чтобы порт оставался выключенным после перезагрузки ОС.
+# PCI-адрес берётся из agent/config.toml (ключ backup.xhci_pci).
+ExecStartPre=/bin/sh -c 'echo "0000:00:14.0" > /sys/bus/pci/drivers/xhci_hcd/unbind || true'
 ExecStart=/opt/homemonitor/agent_bin
 Restart=always
 RestartSec=10
