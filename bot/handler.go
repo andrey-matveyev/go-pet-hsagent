@@ -52,7 +52,7 @@ func handleCallbackQuery(ctx context.Context, client pb.MonitorServiceClient, bo
 		_, err := client.Reboot(ctx, &pb.RebootRequest{})
 		if err != nil {
 			log.Printf("❌ gRPC Reboot error: %v", err)
-			msg := tgbotapi.NewMessage(cq.Message.Chat.ID, fmt.Sprintf("❌ Ошибка при инициировании перезагрузки: %v", err))
+			msg := tgbotapi.NewMessage(cq.Message.Chat.ID, fmt.Sprintf("❌ Error initiating reboot: %v", err))
 			msg.ParseMode = "Markdown"
 			if _, sendErr := bot.Send(msg); sendErr != nil {
 				log.Printf("⚠️ Failed to send reboot error response: %v", sendErr)
@@ -60,14 +60,14 @@ func handleCallbackQuery(ctx context.Context, client pb.MonitorServiceClient, bo
 			return
 		}
 
-		msg := tgbotapi.NewMessage(cq.Message.Chat.ID, "🔄 Перезагрузка сервера инициирована (через 1 минуту).")
+		msg := tgbotapi.NewMessage(cq.Message.Chat.ID, "🔄 Server reboot initiated (in 1 minute).")
 		msg.ParseMode = "Markdown"
 		if _, err := bot.Send(msg); err != nil {
 			log.Printf("⚠️ Failed to send reboot confirmation response: %v", err)
 		}
 
 	case "reboot_cancel":
-		msg := tgbotapi.NewMessage(cq.Message.Chat.ID, "❌ Перезагрузка отменена.")
+		msg := tgbotapi.NewMessage(cq.Message.Chat.ID, "❌ Reboot cancelled.")
 		msg.ParseMode = "Markdown"
 		if _, err := bot.Send(msg); err != nil {
 			log.Printf("⚠️ Failed to send reboot cancellation response: %v", err)
@@ -452,11 +452,11 @@ func handleCommand(parentCtx context.Context, client pb.MonitorServiceClient, bo
 	case "reboot":
 		keyboard := tgbotapi.NewInlineKeyboardMarkup(
 			tgbotapi.NewInlineKeyboardRow(
-				tgbotapi.NewInlineKeyboardButtonData("Да", "reboot_confirm"),
-				tgbotapi.NewInlineKeyboardButtonData("Нет", "reboot_cancel"),
+				tgbotapi.NewInlineKeyboardButtonData("Yes", "reboot_confirm"),
+				tgbotapi.NewInlineKeyboardButtonData("No", "reboot_cancel"),
 			),
 		)
-		rebootMsg := tgbotapi.NewMessage(chatID, "⚠️ Вы уверены, что хотите перезагрузить сервер?")
+		rebootMsg := tgbotapi.NewMessage(chatID, "⚠️ Are you sure you want to reboot the server?")
 		rebootMsg.ReplyMarkup = keyboard
 		rebootMsg.ParseMode = "Markdown"
 		if _, err := bot.Send(rebootMsg); err != nil {

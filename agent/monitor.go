@@ -88,14 +88,14 @@ func (s *server) monitorBatteryLoop() {
 			if (cap == 20 || cap == 10) && s.lastCap != cap {
 				s.eventChan <- &pb.StreamEventsResponse{
 					Type:    "battery",
-					Message: fmt.Sprintf("🪫 Низкий заряд батареи: %d%% (%s)", cap, stat),
+					Message: fmt.Sprintf("🪫 Low battery: %d%% (%s)", cap, stat),
 				}
 			}
 			// Оповещаем при смене статуса подключения зарядки
 			if stat != s.lastStat {
-				msg := fmt.Sprintf("🔌 Зарядное устройство подключено (%s).", s.lastStat)
+				msg := fmt.Sprintf("🔌 Charger connected (%s).", s.lastStat)
 				if stat == "Discharging" {
-					msg = "🔋 Ноутбук перешел на работу от батареи."
+					msg = "🔋 Laptop switched to battery power."
 				}
 				s.eventChan <- &pb.StreamEventsResponse{Type: "battery", Message: msg}
 				s.lastStat = stat
@@ -122,7 +122,7 @@ func (s *server) monitorCpuLoop() {
 				if !s.cpuAlerted {
 					s.eventChan <- &pb.StreamEventsResponse{
 						Type:    "cpu",
-						Message: fmt.Sprintf("🔥 Перегрев процессора! Температура: %.1f°C (Порог: %.1f°C)", temp, s.cfg.Monitoring.CpuTempThreshold),
+						Message: fmt.Sprintf("🔥 CPU overheating! Temperature: %.1f°C (Threshold: %.1f°C)", temp, s.cfg.Monitoring.CpuTempThreshold),
 					}
 					s.cpuAlerted = true
 				}
@@ -130,7 +130,7 @@ func (s *server) monitorCpuLoop() {
 				if s.cpuAlerted && temp < s.cfg.Monitoring.CpuTempThreshold-5.0 {
 					s.eventChan <- &pb.StreamEventsResponse{
 						Type:    "cpu",
-						Message: fmt.Sprintf("✅ Температура процессора в норме: %.1f°C", temp),
+						Message: fmt.Sprintf("✅ CPU temperature normal: %.1f°C", temp),
 					}
 					s.cpuAlerted = false
 				}
@@ -152,7 +152,7 @@ func (s *server) monitorRebootLoop() {
 		if required && !s.rebootAlerted {
 			s.eventChan <- &pb.StreamEventsResponse{
 				Type:    "reboot_required",
-				Message: "⚠️ Требуется перезагрузка сервера после обновления системы.",
+				Message: "⚠️ Server reboot required after system update.",
 			}
 			s.rebootAlerted = true
 		} else if !required && s.rebootAlerted {
@@ -193,7 +193,7 @@ func (s *server) monitorDisksLoop() {
 					if !isAlerted {
 						s.eventChan <- &pb.StreamEventsResponse{
 							Type:    "disk",
-							Message: fmt.Sprintf("⚠️ Мало места на диске [%s] (%s): %.1f%% свободно", name, path, disk.FreePct),
+							Message: fmt.Sprintf("⚠️ Low disk space on [%s] (%s): %.1f%% free", name, path, disk.FreePct),
 						}
 						s.diskAlerted[name] = true
 					}
@@ -201,7 +201,7 @@ func (s *server) monitorDisksLoop() {
 					if isAlerted && disk.FreePct > s.cfg.Monitoring.DiskMinFreePercent+5.0 {
 						s.eventChan <- &pb.StreamEventsResponse{
 							Type:    "disk",
-							Message: fmt.Sprintf("✅ Место на диске [%s] восстановилось: %.1f%% свободно", name, disk.FreePct),
+							Message: fmt.Sprintf("✅ Disk space [%s] restored: %.1f%% free", name, disk.FreePct),
 						}
 						s.diskAlerted[name] = false
 					}
