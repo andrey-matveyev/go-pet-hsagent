@@ -370,6 +370,21 @@ func (s *server) TriggerBackup(ctx context.Context, in *pb.TriggerBackupRequest)
 	}, nil
 }
 
+// setXHCIBind привязывает (bind=true) или отвязывает (bind=false) xHCI PCI-устройство
+// от драйвера xhci_hcd, тем самым включая или выключая питание USB-порта.
+func (s *server) setXHCIBind(pciAddr string, bind bool, ctx context.Context) (string, error) {
+	action := "bind"
+	if !bind {
+		action = "unbind"
+	}
+	pciAddr = strings.TrimSpace(pciAddr)
+	if pciAddr == "" {
+		return "", fmt.Errorf("xHCI PCI address is empty")
+	}
+	cmd := fmt.Sprintf("echo '%s' > /sys/bus/pci/drivers/xhci_hcd/%s", pciAddr, action)
+	return s.sysRunner.RunCmdWithContext(ctx, "sh", "-c", cmd)
+}
+
 // disableBackupUSB отключает питание USB-порта с бэкап-диском,
 // unbinding соответствующего xHCI PCI-устройства из драйвера xhci_hcd.
 // Вызывается при старте агента (включая после перезагрузки ОС),
@@ -381,8 +396,7 @@ func (s *server) disableBackupUSB() {
 		return
 	}
 
-	unbindCmd := fmt.Sprintf("echo '%s' > /sys/bus/pci/drivers/xhci_hcd/unbind", pciAddr)
-	out, err := s.sysRunner.RunCmdWithContext(context.Background(), "sh", "-c", unbindCmd)
+	out, err := s.setXHCIBind(pciAddr, false, context.Background())
 	if err != nil {
 		log.Printf("⚠️ Не удалось отключить USB порт бэкапа (PCI %s): %v, output: %s", pciAddr, err, out)
 		return
