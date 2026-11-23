@@ -93,10 +93,8 @@ func (s *server) monitorBatteryLoop() {
 			}
 			// Оповещаем при смене статуса подключения зарядки
 			if stat != s.lastStat {
-				msg := fmt.Sprintf("🔌 Charger connected (%s).", s.lastStat)
-				if stat == "Discharging" {
-					msg = "🔋 Laptop switched to battery power."
-				}
+				mode := strings.ToLower(stat)
+				msg := fmt.Sprintf("Battery - %s (%d%%)", mode, cap)
 				s.eventChan <- &pb.StreamEventsResponse{Type: "battery", Message: msg}
 				s.lastStat = stat
 			}
