@@ -58,8 +58,9 @@ func (s *server) runBackupRoutine() {
 	if err != nil || discDev == "" || strings.Contains(discDev, "exit status") {
 		logBuilder.WriteString("⚡ Диск не обнаружен. Перезапускаем питание USB 3.0 (xhci_hcd)...\n")
 
-		unbindCmd := fmt.Sprintf("echo '%s' > /sys/bus/pci/drivers/xhci_hcd/unbind", s.cfg.Backup.XhciPCI)
-		_, _ = s.sysRunner.RunCmdWithContext(globalCtx, "sh", "-c", unbindCmd)
+		if _, err := s.setXHCIBind(s.cfg.Backup.XhciPCI, false, globalCtx); err != nil {
+			log.Printf("⚠️ Не удалось отключить USB порт бэкапа (PCI %s): %v", s.cfg.Backup.XhciPCI, err)
+		}
 
 		select {
 		case <-time.After(5 * time.Second):
@@ -68,8 +69,9 @@ func (s *server) runBackupRoutine() {
 			return
 		}
 
-		bindCmd := fmt.Sprintf("echo '%s' > /sys/bus/pci/drivers/xhci_hcd/bind", s.cfg.Backup.XhciPCI)
-		_, _ = s.sysRunner.RunCmdWithContext(globalCtx, "sh", "-c", bindCmd)
+		if _, err := s.setXHCIBind(s.cfg.Backup.XhciPCI, true, globalCtx); err != nil {
+			log.Printf("⚠️ Не удалось включить USB порт бэкапа (PCI %s): %v", s.cfg.Backup.XhciPCI, err)
+		}
 
 		select {
 		case <-time.After(5 * time.Second):
