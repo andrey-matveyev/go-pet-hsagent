@@ -1,10 +1,12 @@
 package main
 
 import (
+	"context"
 	"fmt"
 	"log"
 	"net"
 	"os"
+	"strings"
 	"time"
 
 	pb "go-pet-hsagent/proto/hsagent/v1"
@@ -53,7 +55,28 @@ func main() {
 		// Делаем задержку, чтобы система успела инициализировать USB-стек
 	// и включить питание порта, прежде чем мы его отключим.
 	time.Sleep(1 * time.Minute)
-srv.disableBackupUSB()
+
+	pciAddr := strings.TrimSpace(srv.cfg.Backup.XhciPCI)
+	if pciAddr != "" {
+		var lastErr error
+		var lastOut string
+		for i := 0; i < 3; i++ {
+			out, err := srv.setXHCIBind(pciAddr, false, context.Background())
+			if err == nil {
+				log.Printf("✅ USB порт бэкапа (PCI %s) отключён. Останется выключенным до повторного включения.", pciAddr)
+				break
+			}
+			lastErr = err
+			lastOut = out
+			log.Printf("⚠️ Попытка %d/3 отключить USB порт бэкапа (PCI %s): %v, output: %s", i+1, pciAddr, err, out)
+			time.Sleep(1 * time.Second)
+		}
+		if lastErr != nil {
+			log.Printf("❌ Не удалось отключить USB порт бэкапа (PCI %s) после 3 попыток: %v, output: %s", pciAddr, lastErr, lastOut)
+		}
+	} else {
+		log.Println("⚠️ backup.xhci_pci не задан в конфиге — пропускаем отключение USB порта бэкапа.")
+	}
 
 	go srv.monitorBatteryLoop()
 	go srv.monitorCpuLoop()

@@ -395,43 +395,11 @@ func (s *server) setXHCIBind(pciAddr string, bind bool, ctx context.Context) (st
 	return s.sysRunner.RunCmdWithContext(ctx, "sh", "-c", cmd)
 }
 
-// disableBackupUSB отключает питание USB-порта с бэкап-диском,
-// unbinding соответствующего xHCI PCI-устройства из драйвера xhci_hcd.
-// Вызывается при старте агента (включая после перезагрузки ОС),
-// чтобы порт оставался выключенным. Остальные USB-порты не затрагиваются.
-func (s *server) disableBackupUSB() {
-	pciAddr := strings.TrimSpace(s.cfg.Backup.XhciPCI)
-	if pciAddr == "" {
-		log.Println("⚠️ backup.xhci_pci не задан в конфиге — пропускаем отключение USB порта бэкапа.")
-		return
-	}
-
-	var lastErr error
-	var lastOut string
-	for i := 0; i < 3; i++ {
-		out, err := s.setXHCIBind(pciAddr, false, context.Background())
-		if err == nil {
-			log.Printf("✅ USB порт бэкапа (PCI %s) отключён. Останется выключенным до повторного включения.", pciAddr)
-			return
-		}
-		lastErr = err
-		lastOut = out
-		log.Printf("⚠️ Попытка %d/3 отключить USB порт бэкапа (PCI %s): %v, output: %s", i+1, pciAddr, err, out)
-		time.Sleep(1 * time.Second)
-	}
-	log.Printf("❌ Не удалось отключить USB порт бэкапа (PCI %s) после 3 попыток: %v, output: %s", pciAddr, lastErr, lastOut)
-}
-
 // gRPC Метод: Перезагрузка сервера (/reboot)
 func (s *server) Reboot(ctx context.Context, in *pb.RebootRequest) (*pb.RebootResponse, error) {
 	log.Println("🔄 Получена команда из Telegram на перезагрузку сервера...")
 
 	go func() {
-		// Перед перезагрузкой отключаем питание USB-порта с бэкап-диском,
-		// чтобы диск не остался обесточенным после перезагрузки.
-		// Затрагивается только порт бэкапа, остальные USB-порты не меняются.
-		s.disableBackupUSB()
-
 		out, err := s.sysRunner.RunCmdWithContext(context.Background(), "/sbin/shutdown", "-r", "+1", "Reboot requested via Telegram Bot")
 		if err != nil {
 			log.Printf("❌ Ошибка при выполнении перезагрузки: %v, output: %s", err, out)
