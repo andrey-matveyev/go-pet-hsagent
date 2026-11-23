@@ -396,12 +396,20 @@ func (s *server) disableBackupUSB() {
 		return
 	}
 
-	out, err := s.setXHCIBind(pciAddr, false, context.Background())
-	if err != nil {
-		log.Printf("⚠️ Не удалось отключить USB порт бэкапа (PCI %s): %v, output: %s", pciAddr, err, out)
-		return
+	var lastErr error
+	var lastOut string
+	for i := 0; i < 3; i++ {
+		out, err := s.setXHCIBind(pciAddr, false, context.Background())
+		if err == nil {
+			log.Printf("✅ USB порт бэкапа (PCI %s) отключён. Останется выключенным до повторного включения.", pciAddr)
+			return
+		}
+		lastErr = err
+		lastOut = out
+		log.Printf("⚠️ Попытка %d/3 отключить USB порт бэкапа (PCI %s): %v, output: %s", i+1, pciAddr, err, out)
+		time.Sleep(1 * time.Second)
 	}
-	log.Printf("✅ USB порт бэкапа (PCI %s) отключён. Останется выключенным до повторного включения.", pciAddr)
+	log.Printf("❌ Не удалось отключить USB порт бэкапа (PCI %s) после 3 попыток: %v, output: %s", pciAddr, lastErr, lastOut)
 }
 
 // gRPC Метод: Перезагрузка сервера (/reboot)
