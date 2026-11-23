@@ -50,7 +50,10 @@ func main() {
 
 	// Отключаем USB-порт бэкапа при старте агента (в т.ч. после перезагрузки ОС),
 	// чтобы он оставался выключенным. Остальные USB-порты не затрагиваются.
-	srv.disableBackupUSB()
+		// Делаем задержку, чтобы система успела инициализировать USB-стек
+	// и включить питание порта, прежде чем мы его отключим.
+	time.Sleep(1 * time.Minute)
+srv.disableBackupUSB()
 
 	go srv.monitorBatteryLoop()
 	go srv.monitorCpuLoop()
