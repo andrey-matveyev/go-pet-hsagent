@@ -81,7 +81,9 @@ func handleCallbackQuery(ctx context.Context, client pb.MonitorServiceClient, bo
 // startAlarmStream принимает интерфейс TelegramSender вместо жесткой зависимости от *tgbotapi.BotAPI
 // startupMsg — сообщение о запуске бота (отправляется перед обработкой очереди)
 // shutdownMsg — сообщение о выгрузке бота (отправляется перед сохранением очереди)
-func startAlarmStream(ctx context.Context, client pb.MonitorServiceClient, bot TelegramSender, startupMsg, shutdownMsg string) {
+// Возвращает канал, который закрывается после завершения всех операций выгрузки
+// (отправка сообщения о выгрузке и сохранение очереди на диск).
+func startAlarmStream(ctx context.Context, client pb.MonitorServiceClient, bot TelegramSender, startupMsg, shutdownMsg string) <-chan struct{} {
 	listQueue := queue.NewListQueue[QueueItem]()
 
 	// 1. ЗАГРУЗКА ИЗ ФАЙЛА (при старте)
@@ -168,7 +170,10 @@ func startAlarmStream(ctx context.Context, client pb.MonitorServiceClient, bot T
 	}()
 
 	// 4. СОХРАНЕНИЕ НА ДИСК (при остановке приложения)
+	shutdownDone := make(chan struct{})
 	go func() {
+		defer close(shutdownDone)
+
 		<-ctx.Done()
 
 		// 4.1. СООБЩЕНИЕ О ВЫГРУЗКЕ БОТА (перед сохранением очереди)
@@ -186,6 +191,8 @@ func startAlarmStream(ctx context.Context, client pb.MonitorServiceClient, bot T
 		}
 		saveQueueToFile(listQueue, pendingMsg)
 	}()
+
+	return shutdownDone
 }
 
 func loadQueueFromFile(q queue.Queue[QueueItem]) {
