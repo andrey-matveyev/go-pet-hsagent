@@ -48,6 +48,10 @@ func main() {
 	}
 	pb.RegisterMonitorServiceServer(s, srv)
 
+	// Отключаем USB-порт бэкапа при старте агента (в т.ч. после перезагрузки ОС),
+	// чтобы он оставался выключенным. Остальные USB-порты не затрагиваются.
+	srv.disableBackupUSB()
+
 	go srv.monitorBatteryLoop()
 	go srv.monitorCpuLoop()
 	go srv.monitorDisksLoop()
