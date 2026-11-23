@@ -362,6 +362,16 @@ func (s *server) TestSystems(ctx context.Context, in *pb.TestSystemsRequest) (*p
 func (s *server) TriggerBackup(ctx context.Context, in *pb.TriggerBackupRequest) (*pb.TriggerBackupResponse, error) {
 	log.Println("🚀 Получена команда из Telegram на принудительный запуск бэкапа...")
 
+	// Если сервер работает от батареи — отменяем бэкап и сразу сообщаем об этом пользователю,
+	// вместо ложного «запущено» с уходом原因 в общий стрим событий.
+	if cap, stat, err := s.getBatteryInfo(); err == nil && stat == "Discharging" {
+		msg := fmt.Sprintf("⚠️ Бэкап отменен: сервер работает от батареи (%d%%, Discharging). Резервное копирование выполняется только при питании от сети.", cap)
+		log.Println(msg)
+		return &pb.TriggerBackupResponse{
+			ResultMessage: msg,
+		}, nil
+	}
+
 	// Запускаем бэкап асинхронно в фоне (в том же стиле, что и регламентный)
 	go s.runBackupRoutine()
 
