@@ -39,6 +39,11 @@ func sendTextMessage(bot TelegramSender, chatID int64, text string) error {
 	return err
 }
 
+// withTimestamp добавляет временную метку в конец сообщения (аналогично ответу на /status)
+func withTimestamp(text string) string {
+	return fmt.Sprintf("%s\n%s", text, time.Now().Format(time.RFC3339))
+}
+
 // handleCallbackQuery обрабатывает нажатия инлайн-кнопок (подтверждение/отмена перезагрузки)
 func handleCallbackQuery(ctx context.Context, client pb.MonitorServiceClient, bot TelegramSender, cq *tgbotapi.CallbackQuery) {
 	// Убираем "часики" с кнопки
@@ -52,7 +57,7 @@ func handleCallbackQuery(ctx context.Context, client pb.MonitorServiceClient, bo
 		_, err := client.Reboot(ctx, &pb.RebootRequest{})
 		if err != nil {
 			log.Printf("❌ gRPC Reboot error: %v", err)
-			msg := tgbotapi.NewMessage(cq.Message.Chat.ID, fmt.Sprintf("❌ Error initiating reboot: %v", err))
+			msg := tgbotapi.NewMessage(cq.Message.Chat.ID, withTimestamp(fmt.Sprintf("❌ Error initiating reboot: %v", err)))
 			msg.ParseMode = "Markdown"
 			if _, sendErr := bot.Send(msg); sendErr != nil {
 				log.Printf("⚠️ Failed to send reboot error response: %v", sendErr)
@@ -60,14 +65,14 @@ func handleCallbackQuery(ctx context.Context, client pb.MonitorServiceClient, bo
 			return
 		}
 
-		msg := tgbotapi.NewMessage(cq.Message.Chat.ID, "🔄 Server reboot initiated (in 1 minute).")
+		msg := tgbotapi.NewMessage(cq.Message.Chat.ID, withTimestamp("🔄 Server reboot initiated (in 1 minute)."))
 		msg.ParseMode = "Markdown"
 		if _, err := bot.Send(msg); err != nil {
 			log.Printf("⚠️ Failed to send reboot confirmation response: %v", err)
 		}
 
 	case "reboot_cancel":
-		msg := tgbotapi.NewMessage(cq.Message.Chat.ID, "❌ Reboot cancelled.")
+		msg := tgbotapi.NewMessage(cq.Message.Chat.ID, withTimestamp("❌ Reboot cancelled."))
 		msg.ParseMode = "Markdown"
 		if _, err := bot.Send(msg); err != nil {
 			log.Printf("⚠️ Failed to send reboot cancellation response: %v", err)
@@ -317,7 +322,7 @@ func processStream(ctx context.Context, client pb.MonitorServiceClient, inpChan 
 
 		inpChan <- QueueItem{
 			ChatID: chatID,
-			Text:   event.Message,
+			Text:   withTimestamp(event.Message),
 		}
 	}
 }
@@ -438,7 +443,7 @@ func handleCommand(parentCtx context.Context, client pb.MonitorServiceClient, bo
 			log.Printf("⚠️ TestSystems RPC error: %v", err)
 			text = "❌ gRPC error while invoking self-test."
 		} else {
-			text = res.ResultMessage
+			text = withTimestamp(res.ResultMessage)
 		}
 	case "backup":
 		res, err := client.TriggerBackup(reqCtx, &pb.TriggerBackupRequest{})
@@ -446,7 +451,7 @@ func handleCommand(parentCtx context.Context, client pb.MonitorServiceClient, bo
 			log.Printf("⚠️ TriggerBackup RPC error: %v", err)
 			text = "❌ gRPC error while triggering backup."
 		} else {
-			text = res.ResultMessage
+			text = withTimestamp(res.ResultMessage)
 		}
 
 	case "reboot":
@@ -456,7 +461,7 @@ func handleCommand(parentCtx context.Context, client pb.MonitorServiceClient, bo
 				tgbotapi.NewInlineKeyboardButtonData("No", "reboot_cancel"),
 			),
 		)
-		rebootMsg := tgbotapi.NewMessage(chatID, "⚠️ Are you sure you want to reboot the server?")
+		rebootMsg := tgbotapi.NewMessage(chatID, withTimestamp("⚠️ Are you sure you want to reboot the server?"))
 		rebootMsg.ReplyMarkup = keyboard
 		rebootMsg.ParseMode = "Markdown"
 		if _, err := bot.Send(rebootMsg); err != nil {
