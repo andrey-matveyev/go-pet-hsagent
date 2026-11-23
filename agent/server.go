@@ -350,11 +350,11 @@ func (s *server) TestSystems(ctx context.Context, in *pb.TestSystemsRequest) (*p
 
 	s.eventChan <- &pb.StreamEventsResponse{
 		Type:    "test",
-		Message: "🔔 Тестовое уведомление: gRPC-стриминг работает корректно!",
+		Message: "Test notification: gRPC event stream is working correctly!",
 	}
 
 	return &pb.TestSystemsResponse{
-		ResultMessage: "Тестовое событие успешно отправлено в стрим.",
+		ResultMessage: "Test event successfully sent to stream.",
 	}, nil
 }
 
@@ -365,7 +365,7 @@ func (s *server) TriggerBackup(ctx context.Context, in *pb.TriggerBackupRequest)
 	// Если сервер работает от батареи — отменяем бэкап и сразу сообщаем об этом пользователю,
 	// вместо ложного «запущено» с уходом原因 в общий стрим событий.
 	if cap, stat, err := s.getBatteryInfo(); err == nil && stat == "Discharging" {
-		msg := fmt.Sprintf("⚠️ Бэкап отменен: сервер работает от батареи (%d%%, Discharging). Резервное копирование выполняется только при питании от сети.", cap)
+		msg := fmt.Sprintf("Backup cancelled: server running on battery (%d%%, Discharging). Backup only runs on AC power.", cap)
 		log.Println(msg)
 		return &pb.TriggerBackupResponse{
 			ResultMessage: msg,
@@ -376,7 +376,7 @@ func (s *server) TriggerBackup(ctx context.Context, in *pb.TriggerBackupRequest)
 	go s.runBackupRoutine()
 
 	return &pb.TriggerBackupResponse{
-		ResultMessage: "🚀 Запущен принудительный бэкап хранилища по команде из Telegram.",
+		ResultMessage: "Forced storage backup started via Telegram command.",
 	}, nil
 }
 
@@ -436,6 +436,6 @@ func (s *server) Reboot(ctx context.Context, in *pb.RebootRequest) (*pb.RebootRe
 	}()
 
 	return &pb.RebootResponse{
-		ResultMessage: "🔄 Перезагрузка сервера инициирована через Telegram (через 1 минуту).",
+		ResultMessage: "Server reboot initiated via Telegram (in 1 minute).",
 	}, nil
 }
