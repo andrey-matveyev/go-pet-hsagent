@@ -24,7 +24,7 @@ func (s *server) startSchedulerLoop() {
 
 func (s *server) runBackupRoutine() {
 	if cap, stat, err := s.getBatteryInfo(); err == nil && stat == "Discharging" {
-		msg := fmt.Sprintf("⚠️ Процесс бэкапа отменен: сервер работает от батареи (%d%%, Discharging). Резервное копирование выполняется только при питании от сети.", cap)
+		msg := fmt.Sprintf("Backup cancelled: server running on battery (%d%%, Discharging). Backup only runs on AC power.", cap)
 		log.Println(msg)
 		s.eventChan <- &pb.StreamEventsResponse{Type: "backup_status", Message: msg}
 		return
@@ -33,7 +33,7 @@ func (s *server) runBackupRoutine() {
 	s.mu.Lock()
 	if s.isRunning {
 		s.mu.Unlock()
-		s.eventChan <- &pb.StreamEventsResponse{Type: "backup_status", Message: "⚠️ Бэкап уже выполняется в другом потоке. Новый запуск отменен."}
+		s.eventChan <- &pb.StreamEventsResponse{Type: "backup_status", Message: "Backup already running in another thread. New launch cancelled."}
 		return
 	}
 	s.isRunning = true
@@ -45,8 +45,6 @@ func (s *server) runBackupRoutine() {
 		s.mu.Unlock()
 	}()
 
-	s.eventChan <- &pb.StreamEventsResponse{Type: "backup_status", Message: "🚀 Запущен регламентный бэкап диска стореджа."}
-
 	globalCtx, cancel := context.WithTimeout(context.Background(), 4*time.Hour)
 	defer cancel()
 
@@ -56,7 +54,7 @@ func (s *server) runBackupRoutine() {
 	discDev := strings.TrimSpace(rawDev)
 
 	if err != nil || discDev == "" || strings.Contains(discDev, "exit status") {
-		logBuilder.WriteString("⚡ Диск не обнаружен. Перезапускаем питание USB 3.0 (xhci_hcd)...\n")
+		logBuilder.WriteString("Disk not detected. Restarting USB 3.0 power (xhci_hcd)...\n")
 
 		if _, err := s.setXHCIBind(s.cfg.Backup.XhciPCI, false, globalCtx); err != nil {
 			log.Printf("⚠️ Не удалось отключить USB порт бэкапа (PCI %s): %v", s.cfg.Backup.XhciPCI, err)
@@ -65,7 +63,7 @@ func (s *server) runBackupRoutine() {
 		select {
 		case <-time.After(5 * time.Second):
 		case <-globalCtx.Done():
-			s.eventChan <- &pb.StreamEventsResponse{Type: "backup_status", Message: "❌ Ошибка: Превышен таймаут при перезапуске USB порта."}
+			s.eventChan <- &pb.StreamEventsResponse{Type: "backup_status", Message: "Error: Timeout while restarting USB port."}
 			return
 		}
 
@@ -84,12 +82,12 @@ func (s *server) runBackupRoutine() {
 	}
 
 	if err != nil || discDev == "" || strings.Contains(discDev, "exit status") {
-		s.eventChan <- &pb.StreamEventsResponse{Type: "backup_status", Message: "❌ Ошибка бэкапа: Внешний жесткий диск не найден! Проверьте USB-кабель."}
+		s.eventChan <- &pb.StreamEventsResponse{Type: "backup_status", Message: "Backup error: External hard drive not found! Check USB cable."}
 		return
 	}
 
 	if _, err := s.sysRunner.RunCmdWithContext(globalCtx, "mkdir", "-p", s.cfg.Backup.MountPoint); err != nil {
-		s.eventChan <- &pb.StreamEventsResponse{Type: "backup_status", Message: fmt.Sprintf("❌ Ошибка создания папки монтирования: %v", err)}
+		s.eventChan <- &pb.StreamEventsResponse{Type: "backup_status", Message: fmt.Sprintf("Error creating mount point: %v", err)}
 		return
 	}
 
@@ -97,7 +95,7 @@ func (s *server) runBackupRoutine() {
 	if err != nil || strings.TrimSpace(mountCheck) == "" {
 		_, err = s.sysRunner.RunCmdWithContext(globalCtx, "mount", discDev, s.cfg.Backup.MountPoint)
 		if err != nil {
-			s.eventChan <- &pb.StreamEventsResponse{Type: "backup_status", Message: fmt.Sprintf("❌ Ошибка монтирования: %v", err)}
+			s.eventChan <- &pb.StreamEventsResponse{Type: "backup_status", Message: fmt.Sprintf("Error mounting: %v", err)}
 			return
 		}
 	}
@@ -106,12 +104,12 @@ func (s *server) runBackupRoutine() {
 	if err != nil || !strings.Contains(strings.TrimSpace(realTargetDev), discDev) {
 		s.eventChan <- &pb.StreamEventsResponse{
 			Type:    "backup_status",
-			Message: "❌ КРИТИЧЕСКАЯ ОШИБКА: Защита сработала. Папка не указывает на USB-диск! Бэкап заблокирован.",
+			Message: "Critical error: Protection triggered. Folder does not point to USB drive! Backup blocked.",
 		}
 		return
 	}
 
-	logBuilder.WriteString("🔄 Запущена синхронизация rsync...\n")
+	logBuilder.WriteString("Starting rsync synchronization...\n")
 
 	sourceDir := filepath.Clean(s.cfg.Backup.SourceDir) + "/"
 	targetDir := filepath.Clean(s.cfg.Backup.MountPoint) + "/"
@@ -120,7 +118,7 @@ func (s *server) runBackupRoutine() {
 	logBuilder.WriteString(rsyncOut + "\n")
 
 	if rsyncErr != nil {
-		s.eventChan <- &pb.StreamEventsResponse{Type: "backup_status", Message: fmt.Sprintf("❌ Ошибка выполнения rsync (или таймаут):\n%s", logBuilder.String())}
+		s.eventChan <- &pb.StreamEventsResponse{Type: "backup_status", Message: fmt.Sprintf("Error executing rsync (or timeout):\n%s", logBuilder.String())}
 	}
 
 	_, _ = s.sysRunner.RunCmdWithContext(context.Background(), "umount", "-l", s.cfg.Backup.MountPoint)
@@ -134,6 +132,6 @@ func (s *server) runBackupRoutine() {
 	}
 
 	if rsyncErr == nil {
-		s.eventChan <- &pb.StreamEventsResponse{Type: "backup_status", Message: "✅ Резервное копирование успешно завершено. Внешний диск обесточен."}
+		s.eventChan <- &pb.StreamEventsResponse{Type: "backup_status", Message: "Backup completed successfully. External drive powered off."}
 	}
 }
