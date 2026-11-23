@@ -88,7 +88,7 @@ func (s *server) monitorBatteryLoop() {
 			if (cap == 20 || cap == 10) && s.lastCap != cap {
 				s.eventChan <- &pb.StreamEventsResponse{
 					Type:    "battery",
-					Message: fmt.Sprintf("🪫 Low battery: %d%% (%s)", cap, stat),
+					Message: fmt.Sprintf("Low battery: %d%% (%s)", cap, stat),
 				}
 			}
 			// Оповещаем при смене статуса подключения зарядки
@@ -120,7 +120,7 @@ func (s *server) monitorCpuLoop() {
 				if !s.cpuAlerted {
 					s.eventChan <- &pb.StreamEventsResponse{
 						Type:    "cpu",
-						Message: fmt.Sprintf("🔥 CPU overheating! Temperature: %.1f°C (Threshold: %.1f°C)", temp, s.cfg.Monitoring.CpuTempThreshold),
+						Message: fmt.Sprintf("CPU overheating! Temperature: %.1f°C (Threshold: %.1f°C)", temp, s.cfg.Monitoring.CpuTempThreshold),
 					}
 					s.cpuAlerted = true
 				}
@@ -128,7 +128,7 @@ func (s *server) monitorCpuLoop() {
 				if s.cpuAlerted && temp < s.cfg.Monitoring.CpuTempThreshold-5.0 {
 					s.eventChan <- &pb.StreamEventsResponse{
 						Type:    "cpu",
-						Message: fmt.Sprintf("✅ CPU temperature normal: %.1f°C", temp),
+						Message: fmt.Sprintf("CPU temperature normal: %.1f°C", temp),
 					}
 					s.cpuAlerted = false
 				}
@@ -150,7 +150,7 @@ func (s *server) monitorRebootLoop() {
 		if required && !s.rebootAlerted {
 			s.eventChan <- &pb.StreamEventsResponse{
 				Type:    "reboot_required",
-				Message: "⚠️ Server reboot required after system update.",
+				Message: "Server reboot required after system update.",
 			}
 			s.rebootAlerted = true
 		} else if !required && s.rebootAlerted {
@@ -191,7 +191,7 @@ func (s *server) monitorDisksLoop() {
 					if !isAlerted {
 						s.eventChan <- &pb.StreamEventsResponse{
 							Type:    "disk",
-							Message: fmt.Sprintf("⚠️ Low disk space on [%s] (%s): %.1f%% free", name, path, disk.FreePct),
+							Message: fmt.Sprintf("Low disk space on [%s] (%s): %.1f%% free", name, path, disk.FreePct),
 						}
 						s.diskAlerted[name] = true
 					}
@@ -199,7 +199,7 @@ func (s *server) monitorDisksLoop() {
 					if isAlerted && disk.FreePct > s.cfg.Monitoring.DiskMinFreePercent+5.0 {
 						s.eventChan <- &pb.StreamEventsResponse{
 							Type:    "disk",
-							Message: fmt.Sprintf("✅ Disk space [%s] restored: %.1f%% free", name, disk.FreePct),
+							Message: fmt.Sprintf("Disk space [%s] restored: %.1f%% free", name, disk.FreePct),
 						}
 						s.diskAlerted[name] = false
 					}
