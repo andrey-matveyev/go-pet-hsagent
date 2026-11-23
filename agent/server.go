@@ -427,6 +427,11 @@ func (s *server) Reboot(ctx context.Context, in *pb.RebootRequest) (*pb.RebootRe
 	log.Println("🔄 Получена команда из Telegram на перезагрузку сервера...")
 
 	go func() {
+		// Перед перезагрузкой отключаем питание USB-порта с бэкап-диском,
+		// чтобы диск не остался обесточенным после перезагрузки.
+		// Затрагивается только порт бэкапа, остальные USB-порты не меняются.
+		s.disableBackupUSB()
+
 		out, err := s.sysRunner.RunCmdWithContext(context.Background(), "/sbin/shutdown", "-r", "+1", "Reboot requested via Telegram Bot")
 		if err != nil {
 			log.Printf("❌ Ошибка при выполнении перезагрузки: %v, output: %s", err, out)
