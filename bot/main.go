@@ -53,13 +53,18 @@ func main() {
 	shutdownMsg := fmt.Sprintf("Bot is shutting down.\n%s", time.Now().Format(time.RFC3339))
 
 	// 🛡️ FAULT TOLERANCE: Передаем ctx первым аргументом
-	startAlarmStream(ctx, client, bot, startupMsg, shutdownMsg)
+	shutdownDone := startAlarmStream(ctx, client, bot, startupMsg, shutdownMsg)
 
 	// Start processing incoming Telegram chat commands
 	// (Идеально сюда тоже передать ctx, если ваша функция это поддерживает)
 	startTelegramBotLoop(ctx, client, bot)
 
-	// Небольшая задержка перед завершением процесса main для гарантии сброса файла очереди на диск
+	// Ждем завершения цикла обновлений Telegram
 	<-ctx.Done()
+
+	// Ждем завершения всех операций выгрузки (отправка сообщения о выгрузке + сохранение очереди)
+	<-shutdownDone
+
+	// Небольшая задержка перед завершением процесса main для гарантии сброса файла очереди на диск
 	time.Sleep(500 * time.Millisecond)
 }
