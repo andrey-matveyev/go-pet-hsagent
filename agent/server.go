@@ -148,8 +148,18 @@ func (s *server) setXHCIBind(pciAddr string, bind bool, ctx context.Context) (st
 // Reboot инициирует перезагрузку сервера (команда /reboot)
 func (s *server) Reboot(ctx context.Context, in *pb.RebootRequest) (*pb.RebootResponse, error) {
 	log.Println("🔄 Команда на перезагрузку сервера из Telegram")
+
+	s.mu.Lock()
+	if s.isRunning {
+		s.mu.Unlock()
+		return &pb.RebootResponse{
+			ResultMessage: "Reboot cancelled: backup is currently running. Please try again later.",
+		}, nil
+	}
+	s.mu.Unlock()
+
 	go func() {
-		out, err := s.sysRunner.RunCmdWithContext(context.Background(), "/sbin/shutdown", "-r", "+1", "Reboot requested via Telegram Bot")
+		out, err := s.sysRunner.RunCmdWithContext(context.Background(), "/sbin/shutdown", "-r", "now", "Reboot requested via Telegram Bot")
 		if err != nil {
 			log.Printf("❌ Ошибка перезагрузки: %v, output: %s", err, out)
 		} else {
@@ -157,6 +167,6 @@ func (s *server) Reboot(ctx context.Context, in *pb.RebootRequest) (*pb.RebootRe
 		}
 	}()
 	return &pb.RebootResponse{
-		ResultMessage: "Server reboot initiated via Telegram (in 1 minute).",
+		ResultMessage: "Server reboot initiated immediately.",
 	}, nil
 }
