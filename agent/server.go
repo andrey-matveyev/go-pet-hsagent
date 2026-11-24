@@ -15,28 +15,26 @@ import (
 
 type server struct {
 	pb.UnimplementedMonitorServiceServer
-	cfg         *config
-	eventChan   chan *pb.StreamEventsResponse
-	mu          sync.Mutex
-	lastCap     int
-	lastStat    string
-	cpuAlerted  bool
-	diskAlerted map[string]bool
+	cfg          *config
+	eventChan    chan *pb.StreamEventsResponse
+	mu           sync.Mutex
+	lastCap      int
+	lastStat     string
+	cpuAlerted   bool
+	diskAlerted  map[string]bool
 	rebootAlerted bool
-	isRunning   bool
-
-	// Абстракция для выполнения системных функций
-	sysRunner SystemRunner
+	isRunning    bool
+	sysRunner    SystemRunner
 }
 
-// gRPC Метод: Получение системного статуса
+// GetSystemStatus возвращает текущий статус системы (батарея, CPU, диск, память, аптайм и т.д.)
 func (s *server) GetSystemStatus(ctx context.Context, in *pb.GetSystemStatusRequest) (*pb.GetSystemStatusResponse, error) {
 	bCap, bStat, _ := s.getBatteryInfo()
 	cpuTemp, _ := s.getCpuTemperature()
 	sysDisk, _ := s.getDiskStat("/")
 	storageDisk, _ := s.getDiskStat(s.cfg.Backup.SourceDir)
 
-	var disks []*pb.DiskUsage
+	disks := []*pb.DiskUsage{}
 	if sysDisk != nil {
 		disks = append(disks, &pb.DiskUsage{
 			Name:     getDiskType("/"),
@@ -54,28 +52,20 @@ func (s *server) GetSystemStatus(ctx context.Context, in *pb.GetSystemStatusRequ
 		})
 	}
 
-	// Получаем аптайм сервера
 	uptime, _ := s.getUptime()
+	cpuUsages, _ := s.getCPUUsage()
 
-	// Формируем временные метки
-	now := time.Now().Format(time.RFC3339)
-
-	// Получаем информацию о загрузке CPU по ядрам
-	cpuUsages, cpuErr := s.getCPUUsage()
-	var cpuUsagePb []*pb.CPUUsage
-	if cpuErr == nil {
-		for _, cu := range cpuUsages {
-			cpuUsagePb = append(cpuUsagePb, &pb.CPUUsage{
-				CoreId:   cu.CoreID,
-				UsagePct: cu.Usage,
-			})
-		}
+	cpuUsagePb := make([]*pb.CPUUsage, 0, len(cpuUsages))
+	for _, cu := range cpuUsages {
+		cpuUsagePb = append(cpuUsagePb, &pb.CPUUsage{
+			CoreId:   cu.CoreID,
+			UsagePct: cu.Usage,
+		})
 	}
 
-	// Получаем информацию о памяти
-	memInfo, memErr := s.getMemoryInfo()
+	memInfo, _ := s.getMemoryInfo()
 	var ramPb, swapPb *pb.MemoryInfo
-	if memErr == nil {
+	if memInfo != nil {
 		ramPb = &pb.MemoryInfo{
 			TotalBytes: memInfo.TotalRAMBytes,
 			UsedBytes:  memInfo.UsedRAMBytes,
@@ -88,29 +78,28 @@ func (s *server) GetSystemStatus(ctx context.Context, in *pb.GetSystemStatusRequ
 		}
 	}
 
-	rebootRequired := needsReboot()
-
 	return &pb.GetSystemStatusResponse{
 		BatteryCapacity: int32(bCap),
 		BatteryStatus:   bStat,
 		CpuTemperature:  cpuTemp,
-		Timestamp:       now,
+		Timestamp:       time.Now().Format(time.RFC3339),
 		Disks:           disks,
 		Ram:             ramPb,
 		Swap:            swapPb,
 		CpuUsage:        cpuUsagePb,
 		Uptime:          uptime,
 		ServerModel:     getServerModel(),
-		RebootRequired:  rebootRequired,
+		RebootRequired:  needsReboot(),
 	}, nil
 }
 
-// Получение информации о загрузке CPU по ядрам из /proc/stat
+// CPUCoreUsage содержит загрузку одного ядра CPU
 type CPUCoreUsage struct {
 	CoreID string
 	Usage  float64
 }
 
+// getCPUUsage читает /proc/stat дважды с паузой и вычисляет загрузку по ядрам
 func (s *server) getCPUUsage() ([]CPUCoreUsage, error) {
 	readStats := func() (map[string]struct{ idle, total float64 }, error) {
 		data, err := s.sysRunner.ReadFile("/proc/stat")
@@ -123,14 +112,16 @@ func (s *server) getCPUUsage() ([]CPUCoreUsage, error) {
 				continue
 			}
 			fields := strings.Fields(line)
-			coreName := fields[0] // "cpu", "cpu0", "cpu1"
-
+			if len(fields) < 5 {
+				continue
+			}
+			coreName := fields[0]
 			var total float64
 			for _, f := range fields[1:] {
 				v, _ := strconv.ParseFloat(f, 64)
 				total += v
 			}
-			idle, _ := strconv.ParseFloat(fields[4], 64) // idle time
+			idle, _ := strconv.ParseFloat(fields[4], 64)
 			res[coreName] = struct{ idle, total float64 }{idle: idle, total: total}
 		}
 		return res, nil
@@ -140,7 +131,7 @@ func (s *server) getCPUUsage() ([]CPUCoreUsage, error) {
 	if err != nil {
 		return nil, err
 	}
-	time.Sleep(200 * time.Millisecond) // Короткая пауза между замерами
+	time.Sleep(200 * time.Millisecond)
 	stat2, err := readStats()
 	if err != nil {
 		return nil, err
@@ -154,12 +145,10 @@ func (s *server) getCPUUsage() ([]CPUCoreUsage, error) {
 		}
 		idleDelta := s2.idle - s1.idle
 		totalDelta := s2.total - s1.total
-
 		usage := 0.0
 		if totalDelta > 0 {
 			usage = (1.0 - idleDelta/totalDelta) * 100
 		}
-
 		if core == "cpu" {
 			core = "Overall"
 		}
@@ -168,7 +157,7 @@ func (s *server) getCPUUsage() ([]CPUCoreUsage, error) {
 	return results, nil
 }
 
-// Получение информации о RAM и Swap из /proc/meminfo
+// MemInfo содержит информацию о RAM и Swap из /proc/meminfo
 type MemInfo struct {
 	TotalRAMBytes  float64
 	UsedRAMBytes   float64
@@ -178,6 +167,7 @@ type MemInfo struct {
 	SwapUsagePct   float64
 }
 
+// getMemoryInfo читает /proc/meminfo и возвращает статистику памяти
 func (s *server) getMemoryInfo() (*MemInfo, error) {
 	data, err := s.sysRunner.ReadFile("/proc/meminfo")
 	if err != nil {
@@ -185,16 +175,13 @@ func (s *server) getMemoryInfo() (*MemInfo, error) {
 	}
 
 	var memTotal, memAvailable, swapTotal, swapFree float64
-
-	lines := strings.Split(string(data), "\n")
-	for _, line := range lines {
+	for _, line := range strings.Split(string(data), "\n") {
 		fields := strings.Fields(line)
 		if len(fields) < 2 {
 			continue
 		}
-		val, _ := strconv.ParseFloat(fields[1], 64) // значения в kB
+		val, _ := strconv.ParseFloat(fields[1], 64)
 		valBytes := val * 1024
-
 		switch fields[0] {
 		case "MemTotal:":
 			memTotal = valBytes
@@ -208,28 +195,25 @@ func (s *server) getMemoryInfo() (*MemInfo, error) {
 	}
 
 	usedRAM := memTotal - memAvailable
-	ramPct := 0.0
-	if memTotal > 0 {
-		ramPct = (usedRAM / memTotal) * 100
-	}
-
 	usedSwap := swapTotal - swapFree
-	swapPct := 0.0
-	if swapTotal > 0 {
-		swapPct = (usedSwap / swapTotal) * 100
-	}
-
 	return &MemInfo{
 		TotalRAMBytes:  memTotal,
 		UsedRAMBytes:   usedRAM,
-		RAMUsagePct:    ramPct,
+		RAMUsagePct:    pct(usedRAM, memTotal),
 		TotalSwapBytes: swapTotal,
 		UsedSwapBytes:  usedSwap,
-		SwapUsagePct:   swapPct,
+		SwapUsagePct:   pct(usedSwap, swapTotal),
 	}, nil
 }
 
-// Получение аптайма сервера из /proc/uptime
+func pct(used, total float64) float64 {
+	if total > 0 {
+		return (used / total) * 100
+	}
+	return 0
+}
+
+// getUptime читает /proc/uptime и возвращает форматированную строку
 func (s *server) getUptime() (string, error) {
 	data, err := s.sysRunner.ReadFile("/proc/uptime")
 	if err != nil {
@@ -243,77 +227,56 @@ func (s *server) getUptime() (string, error) {
 	if err != nil {
 		return "", err
 	}
-
 	totalMinutes := int(uptimeSeconds) / 60
 	days := totalMinutes / (24 * 60)
 	hours := (totalMinutes % (24 * 60)) / 60
 	minutes := totalMinutes % 60
-
 	if days > 0 {
 		return fmt.Sprintf("%dd / %dh", days, hours), nil
 	}
 	return fmt.Sprintf("%dh / %dm", hours, minutes), nil
 }
 
-// getDiskType определяет тип диска (SSD/HDD) по точке монтирования,
-// читая /sys/block/<device>/queue/rotational.
+// getDiskType определяет тип диска (SSD/HDD) по точке монтирования
 func getDiskType(mountPath string) string {
 	data, err := os.ReadFile("/proc/mounts")
 	if err != nil {
 		return "Unknown"
 	}
-
 	var deviceName string
 	for _, line := range strings.Split(string(data), "\n") {
 		fields := strings.Fields(line)
-		if len(fields) < 2 {
-			continue
-		}
-		// fields[0] = устройство, fields[1] = точка монтирования
-		if fields[1] == mountPath {
+		if len(fields) >= 2 && fields[1] == mountPath {
 			deviceName = fields[0]
 			break
 		}
 	}
-
 	if deviceName == "" {
 		return "Unknown"
 	}
-
-	// Убираем /dev/ префикс
 	deviceName = strings.TrimPrefix(deviceName, "/dev/")
-
-	// Извлекаем базовое имя устройства (убираем номер раздела)
 	baseDevice := extractBaseDevice(deviceName)
 
-	rotationalPath := fmt.Sprintf("/sys/block/%s/queue/rotational", baseDevice)
-	rotRaw, err := os.ReadFile(rotationalPath)
+	rotRaw, err := os.ReadFile(fmt.Sprintf("/sys/block/%s/queue/rotational", baseDevice))
 	if err != nil {
 		return "Unknown"
 	}
-
-	rotational := strings.TrimSpace(string(rotRaw))
-	if rotational == "0" {
+	if strings.TrimSpace(string(rotRaw)) == "0" {
 		return "SSD"
 	}
 	return "HDD"
 }
 
-// extractBaseDevice извлекает базовое имя блочного устройства из имени раздела.
-// Например: sda1 -> sda, nvme0n1p1 -> nvme0n1, sda -> sda.
+// extractBaseDevice извлекает базовое имя блочного устройства (sda1 -> sda, nvme0n1p1 -> nvme0n1)
 func extractBaseDevice(device string) string {
-	// Для NVMe устройств: nvme0n1p1 -> nvme0n1
 	if strings.HasPrefix(device, "nvme") {
-		idx := strings.LastIndex(device, "p")
-		if idx > 0 {
+		if idx := strings.LastIndex(device, "p"); idx > 0 {
 			if _, err := strconv.Atoi(device[idx+1:]); err == nil {
 				return device[:idx]
 			}
 		}
 		return device
 	}
-
-	// Для sdX, hdX, vdX и подобных: убираем trailing digits (sda1 -> sda)
 	for i := len(device) - 1; i >= 0; i-- {
 		if device[i] < '0' || device[i] > '9' {
 			return device[:i+1]
@@ -322,7 +285,7 @@ func extractBaseDevice(device string) string {
 	return device
 }
 
-// getServerModel читает актуальную модель железа из DMI (Linux)
+// getServerModel читает модель железа из DMI
 func getServerModel() string {
 	data, err := os.ReadFile("/sys/class/dmi/id/product_name")
 	if err != nil {
@@ -332,9 +295,9 @@ func getServerModel() string {
 	return strings.TrimSpace(string(data))
 }
 
-// gRPC Метод: Стрим алармов
+// StreamEvents стримит события мониторинга в подключённый gRPC-поток
 func (s *server) StreamEvents(in *pb.StreamEventsRequest, stream pb.MonitorService_StreamEventsServer) error {
-	log.Println("🤖 Бот успешно подключился к gRPC стриму событий")
+	log.Println("🤖 Бот подключился к gRPC стриму событий")
 	for event := range s.eventChan {
 		if err := stream.Send(event); err != nil {
 			log.Printf("❌ Ошибка отправки события боту: %v", err)
@@ -344,44 +307,35 @@ func (s *server) StreamEvents(in *pb.StreamEventsRequest, stream pb.MonitorServi
 	return nil
 }
 
-// gRPC Метод: Тест системы (/test)
+// TestSystems отправляет тестовое событие в стрим (команда /test)
 func (s *server) TestSystems(ctx context.Context, in *pb.TestSystemsRequest) (*pb.TestSystemsResponse, error) {
-	log.Println("🔍 Запущен принудительный тест систем...")
-
+	log.Println("🔍 Запущен тест систем...")
 	s.eventChan <- &pb.StreamEventsResponse{
 		Type:    "test",
 		Message: "Test notification: gRPC event stream is working correctly!",
 	}
-
 	return &pb.TestSystemsResponse{
 		ResultMessage: "Test event successfully sent to stream.",
 	}, nil
 }
 
-// gRPC Метод: Ручной запуск бэкапа (/backup)
+// TriggerBackup запускает бэкап по команде из Telegram (команда /backup)
 func (s *server) TriggerBackup(ctx context.Context, in *pb.TriggerBackupRequest) (*pb.TriggerBackupResponse, error) {
-	log.Println("🚀 Получена команда из Telegram на принудительный запуск бэкапа...")
+	log.Println("🚀 Команда на принудительный запуск бэкапа из Telegram")
 
-	// Если сервер работает от батареи — отменяем бэкап и сразу сообщаем об этом пользователю,
-	// вместо ложного «запущено» с уходом原因 в общий стрим событий.
 	if cap, stat, err := s.getBatteryInfo(); err == nil && stat == "Discharging" {
 		msg := fmt.Sprintf("Backup cancelled: server running on battery (%d%%, Discharging). Backup only runs on AC power.", cap)
 		log.Println(msg)
-		return &pb.TriggerBackupResponse{
-			ResultMessage: msg,
-		}, nil
+		return &pb.TriggerBackupResponse{ResultMessage: msg}, nil
 	}
 
-	// Запускаем бэкап асинхронно в фоне (в том же стиле, что и регламентный)
 	go s.runBackupRoutine()
-
 	return &pb.TriggerBackupResponse{
 		ResultMessage: "Forced storage backup started via Telegram command.",
 	}, nil
 }
 
-// setXHCIBind привязывает (bind=true) или отвязывает (bind=false) xHCI PCI-устройство
-// от драйвера xhci_hcd, тем самым включая или выключая питание USB-порта.
+// setXHCIBind привязывает/отвязывает xHCI PCI-устройство (включение/выключение питания USB-порта)
 func (s *server) setXHCIBind(pciAddr string, bind bool, ctx context.Context) (string, error) {
 	action := "bind"
 	if !bind {
@@ -395,19 +349,17 @@ func (s *server) setXHCIBind(pciAddr string, bind bool, ctx context.Context) (st
 	return s.sysRunner.RunCmdWithContext(ctx, "sh", "-c", cmd)
 }
 
-// gRPC Метод: Перезагрузка сервера (/reboot)
+// Reboot инициирует перезагрузку сервера (команда /reboot)
 func (s *server) Reboot(ctx context.Context, in *pb.RebootRequest) (*pb.RebootResponse, error) {
-	log.Println("🔄 Получена команда из Telegram на перезагрузку сервера...")
-
+	log.Println("🔄 Команда на перезагрузку сервера из Telegram")
 	go func() {
 		out, err := s.sysRunner.RunCmdWithContext(context.Background(), "/sbin/shutdown", "-r", "+1", "Reboot requested via Telegram Bot")
 		if err != nil {
-			log.Printf("❌ Ошибка при выполнении перезагрузки: %v, output: %s", err, out)
+			log.Printf("❌ Ошибка перезагрузки: %v, output: %s", err, out)
 		} else {
-			log.Printf("✅ Команда перезагрузки выполнена: %s", out)
+			log.Printf("✅ Перезагрузка запущена: %s", out)
 		}
 	}()
-
 	return &pb.RebootResponse{
 		ResultMessage: "Server reboot initiated via Telegram (in 1 minute).",
 	}, nil
