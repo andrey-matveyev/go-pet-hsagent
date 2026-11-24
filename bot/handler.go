@@ -8,7 +8,6 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
-	"sync"
 	"time"
 
 	pb "go-pet-hsagent/proto/hsagent/v1"
@@ -32,12 +31,6 @@ type QueueItem struct {
 	ParseMode string `json:"parse_mode"`
 }
 
-// rebootPending отслеживает чаты, ожидающие подтверждения перезагрузки (ес/но)
-var (
-	rebootPendingMu sync.Mutex
-	rebootPending   = make(map[int64]struct{})
-)
-
 // sendTextMessage отправляет текстовое сообщение в Telegram с ParseMode Markdown
 func sendTextMessage(bot TelegramSender, chatID int64, text string) error {
 	msg := tgbotapi.NewMessage(chatID, text)
@@ -51,32 +44,6 @@ func withTimestamp(text string) string {
 	return fmt.Sprintf("%s\n%s", text, time.Now().Format(time.RFC3339))
 }
 
-// handleRebootConfirmation обрабатывает ответ пользователя на запрос подтверждения перезагрузки (ес/но)
-func handleRebootConfirmation(ctx context.Context, client pb.MonitorServiceClient, bot TelegramSender, chatID int64, answer string) {
-	rebootPendingMu.Lock()
-	_, exists := rebootPending[chatID]
-	if !exists {
-		rebootPendingMu.Unlock()
-		return
-	}
-	delete(rebootPending, chatID)
-	rebootPendingMu.Unlock()
-
-	normalized := strings.ToLower(strings.TrimSpace(answer))
-
-	if normalized == "ес" {
-		res, err := client.Reboot(ctx, &pb.RebootRequest{})
-		if err != nil {
-			log.Printf("❌ gRPC Reboot error: %v", err)
-			_ = sendTextMessage(bot, chatID, withTimestamp(fmt.Sprintf("Error initiating reboot: %v", err)))
-			return
-		}
-		_ = sendTextMessage(bot, chatID, withTimestamp(res.ResultMessage))
-	} else {
-		_ = sendTextMessage(bot, chatID, withTimestamp("Reboot cancelled."))
-	}
-}
-
 // handleCallbackQuery обрабатывает нажатия инлайн-кнопок (подтверждение/отмена перезагрузки)
 func handleCallbackQuery(ctx context.Context, client pb.MonitorServiceClient, bot TelegramSender, cq *tgbotapi.CallbackQuery) {
 	// Убираем "часики" с кнопки
@@ -86,6 +53,31 @@ func handleCallbackQuery(ctx context.Context, client pb.MonitorServiceClient, bo
 	}
 
 	switch cq.Data {
+	case "reboot_confirm":
+		_, err := client.Reboot(ctx, &pb.RebootRequest{})
+		if err != nil {
+			log.Printf("❌ gRPC Reboot error: %v", err)
+			msg := tgbotapi.NewMessage(cq.Message.Chat.ID, withTimestamp(fmt.Sprintf("Error initiating reboot: %v", err)))
+			msg.ParseMode = "Markdown"
+			if _, sendErr := bot.Send(msg); sendErr != nil {
+				log.Printf("⚠️ Failed to send reboot error response: %v", sendErr)
+			}
+			return
+		}
+
+		msg := tgbotapi.NewMessage(cq.Message.Chat.ID, withTimestamp("Server reboot initiated (in 1 minute)."))
+		msg.ParseMode = "Markdown"
+		if _, err := bot.Send(msg); err != nil {
+			log.Printf("⚠️ Failed to send reboot confirmation response: %v", err)
+		}
+
+	case "reboot_cancel":
+		msg := tgbotapi.NewMessage(cq.Message.Chat.ID, withTimestamp("Reboot cancelled."))
+		msg.ParseMode = "Markdown"
+		if _, err := bot.Send(msg); err != nil {
+			log.Printf("⚠️ Failed to send reboot cancellation response: %v", err)
+		}
+
 	default:
 		log.Printf("⚠️ Unknown callback data: %s", cq.Data)
 	}
@@ -383,15 +375,6 @@ func startTelegramBotLoop(ctx context.Context, client pb.MonitorServiceClient, b
 					continue
 				}
 
-				// Если чат ожидает подтверждения перезагрузки (ес/но), обрабатываем ответ
-				rebootPendingMu.Lock()
-				_, awaitingReboot := rebootPending[update.Message.Chat.ID]
-				rebootPendingMu.Unlock()
-				if awaitingReboot {
-					handleRebootConfirmation(ctx, client, bot, update.Message.Chat.ID, update.Message.Text)
-					continue
-				}
-
 				handleCommand(ctx, client, bot, update.Message)
 			}
 		}
@@ -472,39 +455,18 @@ func handleCommand(parentCtx context.Context, client pb.MonitorServiceClient, bo
 		}
 
 	case "reboot":
-		rebootPendingMu.Lock()
-		if _, exists := rebootPending[chatID]; exists {
-			rebootPendingMu.Unlock()
-			_ = sendTextMessage(bot, chatID, withTimestamp("Reboot confirmation already pending. Please reply with 'ес' or 'но' within 10 seconds."))
-			return
-		}
-		rebootPending[chatID] = struct{}{}
-		rebootPendingMu.Unlock()
-
-		rebootMsg := tgbotapi.NewMessage(chatID, withTimestamp("Are you sure you want to reboot the server? Reply with 'ес' or 'но' within 10 seconds."))
+		keyboard := tgbotapi.NewInlineKeyboardMarkup(
+			tgbotapi.NewInlineKeyboardRow(
+				tgbotapi.NewInlineKeyboardButtonData("Yes", "reboot_confirm"),
+				tgbotapi.NewInlineKeyboardButtonData("No", "reboot_cancel"),
+			),
+		)
+		rebootMsg := tgbotapi.NewMessage(chatID, withTimestamp("Are you sure you want to reboot the server?"))
+		rebootMsg.ReplyMarkup = keyboard
 		rebootMsg.ParseMode = "Markdown"
 		if _, err := bot.Send(rebootMsg); err != nil {
 			log.Printf("⚠️ Failed to send reboot confirmation: %v", err)
-			rebootPendingMu.Lock()
-			delete(rebootPending, chatID)
-			rebootPendingMu.Unlock()
-			return
 		}
-
-		go func() {
-			select {
-			case <-time.After(10 * time.Second):
-				rebootPendingMu.Lock()
-				_, exists := rebootPending[chatID]
-				if exists {
-					delete(rebootPending, chatID)
-				}
-				rebootPendingMu.Unlock()
-				if exists {
-					_ = sendTextMessage(bot, chatID, withTimestamp("Reboot cancelled: no response within 10 seconds."))
-				}
-			}
-		}()
 		return
 
 	case "help":
