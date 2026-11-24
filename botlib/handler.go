@@ -1,4 +1,4 @@
-package main
+package botlib
 
 import (
 	"context"
@@ -45,7 +45,7 @@ func withTimestamp(text string) string {
 }
 
 // handleCallbackQuery обрабатывает нажатия инлайн-кнопок (подтверждение/отмена перезагрузки)
-func handleCallbackQuery(ctx context.Context, client pb.MonitorServiceClient, bot TelegramSender, cq *tgbotapi.CallbackQuery) {
+func HandleCallbackQuery(ctx context.Context, client pb.MonitorServiceClient, bot TelegramSender, cq *tgbotapi.CallbackQuery) {
 	// Убираем "часики" с кнопки
 	callback := tgbotapi.NewCallback(cq.ID, "")
 	if _, err := bot.Send(callback); err != nil {
@@ -88,7 +88,7 @@ func handleCallbackQuery(ctx context.Context, client pb.MonitorServiceClient, bo
 // shutdownMsg — сообщение о выгрузке бота (отправляется перед сохранением очереди)
 // Возвращает канал, который закрывается после завершения всех операций выгрузки
 // (отправка сообщения о выгрузке и сохранение очереди на диск).
-func startAlarmStream(ctx context.Context, client pb.MonitorServiceClient, bot TelegramSender, startupMsg, shutdownMsg string) <-chan struct{} {
+func StartAlarmStream(ctx context.Context, client pb.MonitorServiceClient, bot TelegramSender, startupMsg, shutdownMsg string) <-chan struct{} {
 	listQueue := queue.NewListQueue[QueueItem]()
 
 	// 1. ЗАГРУЗКА ИЗ ФАЙЛА (при старте)
@@ -96,9 +96,9 @@ func startAlarmStream(ctx context.Context, client pb.MonitorServiceClient, bot T
 
 	// 1.1. СООБЩЕНИЕ О ЗАГРУЗКЕ БОТА (первым делом, до обработки очереди)
 	if startupMsg != "" {
-		if err := sendTextMessage(bot, chatID, startupMsg); err != nil {
+		if err := sendTextMessage(bot, ChatID, startupMsg); err != nil {
 			log.Printf("⚠️ Failed to send startup message, queuing: %v", err)
-			listQueue.Push(QueueItem{ChatID: chatID, Text: startupMsg, ParseMode: "Markdown"})
+			listQueue.Push(QueueItem{ChatID: ChatID, Text: startupMsg, ParseMode: "Markdown"})
 		}
 	}
 
@@ -183,9 +183,9 @@ func startAlarmStream(ctx context.Context, client pb.MonitorServiceClient, bot T
 
 		// 4.1. СООБЩЕНИЕ О ВЫГРУЗКЕ БОТА (перед сохранением очереди)
 		if shutdownMsg != "" {
-			if err := sendTextMessage(bot, chatID, shutdownMsg); err != nil {
+			if err := sendTextMessage(bot, ChatID, shutdownMsg); err != nil {
 				log.Printf("⚠️ Failed to send shutdown message, queuing: %v", err)
-				listQueue.Push(QueueItem{ChatID: chatID, Text: shutdownMsg, ParseMode: "Markdown"})
+				listQueue.Push(QueueItem{ChatID: ChatID, Text: shutdownMsg, ParseMode: "Markdown"})
 			}
 		}
 
@@ -321,13 +321,13 @@ func processStream(ctx context.Context, client pb.MonitorServiceClient, inpChan 
 		}
 
 		inpChan <- QueueItem{
-			ChatID: chatID,
+			ChatID: ChatID,
 			Text:   withTimestamp(event.Message),
 		}
 	}
 }
 
-func startTelegramBotLoop(ctx context.Context, client pb.MonitorServiceClient, bot TelegramSender) {
+func StartTelegramBotLoop(ctx context.Context, client pb.MonitorServiceClient, bot TelegramSender) {
 	// Если передана реальная структура tgbotapi.BotAPI, включаем получение апдейтов
 	if realBot, ok := bot.(*tgbotapi.BotAPI); ok {
 		u := tgbotapi.NewUpdate(0)
@@ -356,12 +356,12 @@ func startTelegramBotLoop(ctx context.Context, client pb.MonitorServiceClient, b
 						log.Printf("⚠️ CallbackQuery without message: %s", update.CallbackQuery.Data)
 						continue
 					}
-					if update.CallbackQuery.Message.Chat.ID != chatID {
+					if update.CallbackQuery.Message.Chat.ID != ChatID {
 						log.Printf("⚠️ Unauthorized callback attempt from ChatID: %d, Data: %s",
 							update.CallbackQuery.Message.Chat.ID, update.CallbackQuery.Data)
 						continue
 					}
-					handleCallbackQuery(ctx, client, bot, update.CallbackQuery)
+					HandleCallbackQuery(ctx, client, bot, update.CallbackQuery)
 					continue
 				}
 
@@ -369,19 +369,27 @@ func startTelegramBotLoop(ctx context.Context, client pb.MonitorServiceClient, b
 					continue
 				}
 
-				if update.Message.Chat.ID != chatID {
+				if update.Message.Chat.ID != ChatID {
 					log.Printf("⚠️ Unauthorized access attempt from ChatID: %d, Text: %s",
 						update.Message.Chat.ID, update.Message.Text)
 					continue
 				}
 
-				handleCommand(ctx, client, bot, update.Message)
+				HandleCommand(ctx, client, bot, update.Message)
 			}
 		}
 	}
 }
 
-func handleCommand(parentCtx context.Context, client pb.MonitorServiceClient, bot TelegramSender, msg *tgbotapi.Message) {
+func HandleCommand(parentCtx context.Context, client pb.MonitorServiceClient, bot TelegramSender, msg *tgbotapi.Message) {
+	if ChatID != 0 && (msg.Chat == nil || msg.Chat.ID != ChatID) {
+		chatIDVal := int64(0)
+		if msg.Chat != nil {
+			chatIDVal = msg.Chat.ID
+		}
+		log.Printf("⚠️ Unauthorized access attempt from ChatID: %d, Text: %s", chatIDVal, msg.Text)
+		return
+	}
 	reqCtx, cancel := context.WithTimeout(parentCtx, 5*time.Second)
 	defer cancel()
 
@@ -461,7 +469,7 @@ func handleCommand(parentCtx context.Context, client pb.MonitorServiceClient, bo
 				tgbotapi.NewInlineKeyboardButtonData("No", "reboot_cancel"),
 			),
 		)
-		rebootMsg := tgbotapi.NewMessage(chatID, withTimestamp("Are you sure you want to reboot the server?"))
+		rebootMsg := tgbotapi.NewMessage(ChatID, withTimestamp("Are you sure you want to reboot the server?"))
 		rebootMsg.ReplyMarkup = keyboard
 		rebootMsg.ParseMode = "Markdown"
 		if _, err := bot.Send(rebootMsg); err != nil {
@@ -485,7 +493,7 @@ func handleCommand(parentCtx context.Context, client pb.MonitorServiceClient, bo
 			"/reboot — Reboot the server (requires confirmation)\n"
 	}
 
-	replyMsg := tgbotapi.NewMessage(chatID, text)
+	replyMsg := tgbotapi.NewMessage(ChatID, text)
 	replyMsg.ParseMode = "Markdown"
 	if _, err := bot.Send(replyMsg); err != nil {
 		log.Printf("⚠️ Failed to send Telegram response: %v", err)

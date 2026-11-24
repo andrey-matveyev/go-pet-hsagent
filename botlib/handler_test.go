@@ -1,4 +1,4 @@
-package main
+package botlib
 
 import (
 	"context"
@@ -168,7 +168,7 @@ func TestHandleCommand_Status(t *testing.T) {
 		},
 	}
 
-	handleCommand(context.Background(), mockClient, mockBot, msg)
+	HandleCommand(context.Background(), mockClient, mockBot, msg)
 
 	sent := mockBot.GetSentMessages()
 	if len(sent) != 1 {
@@ -196,7 +196,7 @@ func TestHandleCommand_Backup(t *testing.T) {
 		},
 	}
 
-	handleCommand(context.Background(), mockClient, mockBot, msg)
+	HandleCommand(context.Background(), mockClient, mockBot, msg)
 
 	sent := mockBot.GetSentMessages()
 	if len(sent) != 1 {
