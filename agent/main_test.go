@@ -3,6 +3,7 @@ package main
 import (
 	"context"
 	"errors"
+	"fmt"
 	"strings"
 	"sync"
 	"testing"
@@ -102,13 +103,13 @@ func TestBatteryMonitoring_StatusChange(t *testing.T) {
 	if stat != srv.lastStat {
 		srv.eventChan <- &pb.StreamEventsResponse{
 			Type:    "battery",
-			Message: "🔌 Зарядное устройство подключено.",
+			Message: "Battery - charging (80%)",
 		}
 	}
 
 	select {
 	case event := <-srv.eventChan:
-		if event.Type != "battery" || event.Message != "🔌 Зарядное устройство подключено." {
+		if event.Type != "battery" || event.Message != "Battery - charging (80%)" {
 			t.Errorf("Unexpected event: %v", event)
 		}
 	case <-time.After(100 * time.Millisecond):
@@ -135,7 +136,7 @@ func TestCpuMonitoring_OverheatAndHysteresis(t *testing.T) {
 
 	srv.mu.Lock()
 	if temp > srv.cfg.Monitoring.CpuTempThreshold && !srv.cpuAlerted {
-		srv.eventChan <- &pb.StreamEventsResponse{Type: "cpu", Message: "🔥 Перегрев процессора!"}
+		srv.eventChan <- &pb.StreamEventsResponse{Type: "cpu", Message: fmt.Sprintf("CPU overheating! Temperature: %.1f°C (Threshold: %.1f°C)", temp, srv.cfg.Monitoring.CpuTempThreshold)}
 		srv.cpuAlerted = true
 	}
 	srv.mu.Unlock()
@@ -165,14 +166,14 @@ func TestCpuMonitoring_OverheatAndHysteresis(t *testing.T) {
 
 	srv.mu.Lock()
 	if srv.cpuAlerted && temp < srv.cfg.Monitoring.CpuTempThreshold-5.0 {
-		srv.eventChan <- &pb.StreamEventsResponse{Type: "cpu", Message: "✅ Норма"}
+		srv.eventChan <- &pb.StreamEventsResponse{Type: "cpu", Message: fmt.Sprintf("CPU temperature normal: %.1f°C", temp)}
 		srv.cpuAlerted = false
 	}
 	srv.mu.Unlock()
 
 	select {
 	case event := <-srv.eventChan:
-		if event.Message != "✅ Норма" {
+		if event.Message != fmt.Sprintf("CPU temperature normal: %.1f°C", temp) {
 			t.Errorf("Expected normal event, got %v", event)
 		}
 	default:
@@ -193,7 +194,7 @@ func TestBackup_CancelOnBattery(t *testing.T) {
 
 	select {
 	case event := <-srv.eventChan:
-		if event.Type != "backup_status" || !strings.Contains(event.Message, "сервер работает от батареи") {
+		if event.Type != "backup_status" || !strings.Contains(event.Message, "Backup cancelled: server running on battery") {
 			t.Errorf("Unexpected backup cancellation message: %s", event.Message)
 		}
 	default:
@@ -215,7 +216,7 @@ func TestBackup_PreventParallelRuns(t *testing.T) {
 
 	select {
 	case event := <-srv.eventChan:
-		expected := "⚠️ Бэкап уже выполняется в другом потоке. Новый запуск отменен."
+		expected := "Backup already running in another thread. New launch cancelled."
 		if event.Message != expected {
 			t.Errorf("Expected message '%s', got '%s'", expected, event.Message)
 		}
@@ -246,7 +247,7 @@ func TestBackup_WrongDriveSafetyCheck(t *testing.T) {
 	foundSafetyAlert := false
 	for len(srv.eventChan) > 0 {
 		event := <-srv.eventChan
-		if event.Type == "backup_status" && event.Message == "❌ КРИТИЧЕСКАЯ ОШИБКА: Защита сработала. Папка не указывает на USB-диск! Бэкап заблокирован." {
+		if event.Type == "backup_status" && event.Message == "Critical error: Protection triggered. Folder does not point to USB drive! Backup blocked." {
 			foundSafetyAlert = true
 			break
 		}
