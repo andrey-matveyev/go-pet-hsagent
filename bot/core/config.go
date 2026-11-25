@@ -1,4 +1,4 @@
-package botlib
+package core
 
 import (
 	"fmt"

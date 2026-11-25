@@ -10,7 +10,7 @@ import (
 
 	pb "go-pet-hsagent/proto/hsagent/v1"
 
-	botlib "go-pet-hsagent/botlib"
+	core "go-pet-hsagent/bot/core"
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 	"google.golang.org/grpc"
 )
@@ -116,7 +116,7 @@ func (c *capturedLog) contains(substr string) bool {
 // --- Tests: HandleCommand ---
 
 func TestE2E_HandleCommand_Status(t *testing.T) {
-	botlib.ChatID = 12345
+	core.ChatID = 12345
 
 	mockBot := &E2EMockTelegramSender{}
 	mockClient := &E2EMockMonitorClient{
@@ -140,7 +140,7 @@ func TestE2E_HandleCommand_Status(t *testing.T) {
 		},
 	}
 
-	botlib.HandleCommand(context.Background(), mockClient, mockBot, msg)
+	core.HandleCommand(context.Background(), mockClient, mockBot, msg)
 
 	sent := mockBot.GetSentMessages()
 	if len(sent) != 1 {
@@ -169,7 +169,7 @@ func TestE2E_HandleCommand_Status(t *testing.T) {
 }
 
 func TestE2E_HandleCommand_Test(t *testing.T) {
-	botlib.ChatID = 12345
+	core.ChatID = 12345
 
 	mockBot := &E2EMockTelegramSender{}
 	mockClient := &E2EMockMonitorClient{
@@ -184,7 +184,7 @@ func TestE2E_HandleCommand_Test(t *testing.T) {
 		},
 	}
 
-	botlib.HandleCommand(context.Background(), mockClient, mockBot, msg)
+	core.HandleCommand(context.Background(), mockClient, mockBot, msg)
 
 	sent := mockBot.GetSentMessages()
 	if len(sent) != 1 {
@@ -202,7 +202,7 @@ func TestE2E_HandleCommand_Test(t *testing.T) {
 }
 
 func TestE2E_HandleCommand_Backup(t *testing.T) {
-	botlib.ChatID = 12345
+	core.ChatID = 12345
 
 	mockBot := &E2EMockTelegramSender{}
 	mockClient := &E2EMockMonitorClient{
@@ -217,7 +217,7 @@ func TestE2E_HandleCommand_Backup(t *testing.T) {
 		},
 	}
 
-	botlib.HandleCommand(context.Background(), mockClient, mockBot, msg)
+	core.HandleCommand(context.Background(), mockClient, mockBot, msg)
 
 	sent := mockBot.GetSentMessages()
 	if len(sent) != 1 {
@@ -235,7 +235,7 @@ func TestE2E_HandleCommand_Backup(t *testing.T) {
 }
 
 func TestE2E_HandleCommand_Reboot(t *testing.T) {
-	botlib.ChatID = 12345
+	core.ChatID = 12345
 
 	mockBot := &E2EMockTelegramSender{}
 	mockClient := &E2EMockMonitorClient{}
@@ -248,7 +248,7 @@ func TestE2E_HandleCommand_Reboot(t *testing.T) {
 		},
 	}
 
-	botlib.HandleCommand(context.Background(), mockClient, mockBot, msg)
+	core.HandleCommand(context.Background(), mockClient, mockBot, msg)
 
 	sent := mockBot.GetSentMessages()
 	if len(sent) != 1 {
@@ -270,7 +270,7 @@ func TestE2E_HandleCommand_Reboot(t *testing.T) {
 }
 
 func TestE2E_HandleCommand_Help(t *testing.T) {
-	botlib.ChatID = 12345
+	core.ChatID = 12345
 
 	mockBot := &E2EMockTelegramSender{}
 	mockClient := &E2EMockMonitorClient{}
@@ -283,7 +283,7 @@ func TestE2E_HandleCommand_Help(t *testing.T) {
 		},
 	}
 
-	botlib.HandleCommand(context.Background(), mockClient, mockBot, msg)
+	core.HandleCommand(context.Background(), mockClient, mockBot, msg)
 
 	sent := mockBot.GetSentMessages()
 	if len(sent) != 1 {
@@ -306,7 +306,7 @@ func TestE2E_HandleCommand_Help(t *testing.T) {
 }
 
 func TestE2E_HandleCommand_Unknown(t *testing.T) {
-	botlib.ChatID = 12345
+	core.ChatID = 12345
 
 	mockBot := &E2EMockTelegramSender{}
 	mockClient := &E2EMockMonitorClient{}
@@ -319,7 +319,7 @@ func TestE2E_HandleCommand_Unknown(t *testing.T) {
 		},
 	}
 
-	botlib.HandleCommand(context.Background(), mockClient, mockBot, msg)
+	core.HandleCommand(context.Background(), mockClient, mockBot, msg)
 
 	sent := mockBot.GetSentMessages()
 	if len(sent) != 1 {
@@ -333,7 +333,7 @@ func TestE2E_HandleCommand_Unknown(t *testing.T) {
 }
 
 func TestE2E_HandleCommand_Status_GRPCError(t *testing.T) {
-	botlib.ChatID = 12345
+	core.ChatID = 12345
 
 	mockBot := &E2EMockTelegramSender{}
 	mockClient := &E2EMockMonitorClient{
@@ -348,7 +348,7 @@ func TestE2E_HandleCommand_Status_GRPCError(t *testing.T) {
 		},
 	}
 
-	botlib.HandleCommand(context.Background(), mockClient, mockBot, msg)
+	core.HandleCommand(context.Background(), mockClient, mockBot, msg)
 
 	sent := mockBot.GetSentMessages()
 	if len(sent) != 1 {
@@ -364,7 +364,7 @@ func TestE2E_HandleCommand_Status_GRPCError(t *testing.T) {
 // --- Tests: HandleCallbackQuery (reboot confirm / cancel) ---
 
 func TestE2E_HandleCallbackQuery_RebootConfirm(t *testing.T) {
-	botlib.ChatID = 12345
+	core.ChatID = 12345
 
 	mockBot := &E2EMockTelegramSender{}
 	mockClient := &E2EMockMonitorClient{
@@ -379,7 +379,7 @@ func TestE2E_HandleCallbackQuery_RebootConfirm(t *testing.T) {
 		},
 	}
 
-	botlib.HandleCallbackQuery(context.Background(), mockClient, mockBot, cq)
+	core.HandleCallbackQuery(context.Background(), mockClient, mockBot, cq)
 
 	if mockClient.callCount("Reboot") != 1 {
 		t.Errorf("Expected 1 Reboot call on confirm, got %d", mockClient.callCount("Reboot"))
@@ -397,7 +397,7 @@ func TestE2E_HandleCallbackQuery_RebootConfirm(t *testing.T) {
 }
 
 func TestE2E_HandleCallbackQuery_RebootCancel(t *testing.T) {
-	botlib.ChatID = 12345
+	core.ChatID = 12345
 
 	mockBot := &E2EMockTelegramSender{}
 	mockClient := &E2EMockMonitorClient{}
@@ -410,7 +410,7 @@ func TestE2E_HandleCallbackQuery_RebootCancel(t *testing.T) {
 		},
 	}
 
-	botlib.HandleCallbackQuery(context.Background(), mockClient, mockBot, cq)
+	core.HandleCallbackQuery(context.Background(), mockClient, mockBot, cq)
 
 	if mockClient.callCount("Reboot") != 0 {
 		t.Errorf("Expected 0 Reboot calls on cancel, got %d", mockClient.callCount("Reboot"))
@@ -430,7 +430,7 @@ func TestE2E_HandleCallbackQuery_RebootCancel(t *testing.T) {
 // --- Tests: Unauthorized chatID ---
 
 func TestE2E_HandleCommand_UnauthorizedChatID(t *testing.T) {
-	botlib.ChatID = 12345 // authorized chat
+	core.ChatID = 12345 // authorized chat
 
 	mockBot := &E2EMockTelegramSender{}
 	mockClient := &E2EMockMonitorClient{}
@@ -445,7 +445,7 @@ func TestE2E_HandleCommand_UnauthorizedChatID(t *testing.T) {
 		},
 	}
 
-	botlib.HandleCommand(context.Background(), mockClient, mockBot, msg)
+	core.HandleCommand(context.Background(), mockClient, mockBot, msg)
 
 	// Must log the unauthorized attempt
 	logOutput := captured.release()

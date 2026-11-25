@@ -12,7 +12,7 @@ import (
 
 	tgbotapi "github.com/go-telegram-bot-api/telegram-bot-api/v5"
 
-	botlib "go-pet-hsagent/botlib"
+	core "go-pet-hsagent/bot/core"
 )
 
 var (
@@ -29,12 +29,12 @@ func main() {
 	}
 
 	// Read configuration from environment variables
-	botlib.TgBotToken = os.Getenv("TG_TOKEN")
+	core.TgBotToken = os.Getenv("TG_TOKEN")
 	idRaw := os.Getenv("TG_CHAT_ID")
 
 	var err error
-	botlib.ChatID, err = strconv.ParseInt(idRaw, 10, 64)
-	if botlib.TgBotToken == "" || err != nil || botlib.ChatID == 0 {
+	core.ChatID, err = strconv.ParseInt(idRaw, 10, 64)
+	if core.TgBotToken == "" || err != nil || core.ChatID == 0 {
 		log.Fatalf("❌ Error: TG_TOKEN and a valid non-zero TG_CHAT_ID environment variables must be set!")
 	}
 
@@ -43,14 +43,14 @@ func main() {
 	defer stop()
 
 	// Initialize Telegram API
-	bot, err := tgbotapi.NewBotAPI(botlib.TgBotToken)
+	bot, err := tgbotapi.NewBotAPI(core.TgBotToken)
 	if err != nil {
 		log.Fatalf("failed to init tg bot: %v", err)
 	}
 	log.Printf("🤖 Bot successfully authorized as: %s", bot.Self.UserName)
 
 	// Connect to gRPC Agent
-	client, conn, err := botlib.InitGRPCClient()
+	client, conn, err := core.InitGRPCClient()
 	if err != nil {
 		log.Fatalf("did not connect to grpc agent: %v", err)
 	}
@@ -61,10 +61,10 @@ func main() {
 	shutdownMsg := fmt.Sprintf("Bot is shutting down.\n%s", time.Now().Format(time.RFC3339))
 
 	// 🛡️ FAULT TOLERANCE: Передаем ctx первым аргументом
-	shutdownDone := botlib.StartAlarmStream(ctx, client, bot, startupMsg, shutdownMsg)
+	shutdownDone := core.StartAlarmStream(ctx, client, bot, startupMsg, shutdownMsg)
 
 	// Start processing incoming Telegram chat commands
-	botlib.StartTelegramBotLoop(ctx, client, bot)
+	core.StartTelegramBotLoop(ctx, client, bot)
 
 	// Ждем завершения цикла обновлений Telegram
 	<-ctx.Done()
