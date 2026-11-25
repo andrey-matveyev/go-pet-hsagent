@@ -58,7 +58,10 @@ func main() {
 
 	// Формируем сообщения о загрузке/выгрузке с текущим временем
 	startupMsg := fmt.Sprintf("Bot loaded and ready.\n%s", time.Now().Format(time.RFC3339))
-	shutdownMsg := fmt.Sprintf("Bot is shutting down.\n%s", time.Now().Format(time.RFC3339))
+
+	shutdownMsg := func() string {
+		return fmt.Sprintf("Bot is shutting down.\n%s", time.Now().Format(time.RFC3339))
+	}
 
 	// 🛡️ FAULT TOLERANCE: Передаем ctx первым аргументом
 	shutdownDone := core.StartAlarmStream(ctx, client, bot, startupMsg, shutdownMsg)

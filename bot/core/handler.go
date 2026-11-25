@@ -85,10 +85,10 @@ func HandleCallbackQuery(ctx context.Context, client pb.MonitorServiceClient, bo
 
 // startAlarmStream принимает интерфейс TelegramSender вместо жесткой зависимости от *tgbotapi.BotAPI
 // startupMsg — сообщение о запуске бота (отправляется перед обработкой очереди)
-// shutdownMsg — сообщение о выгрузке бота (отправляется перед сохранением очереди)
+// shutdownMsg — функция, возвращающая сообщение о выгрузке бота (вызывается в момент остановки)
 // Возвращает канал, который закрывается после завершения всех операций выгрузки
 // (отправка сообщения о выгрузке и сохранение очереди на диск).
-func StartAlarmStream(ctx context.Context, client pb.MonitorServiceClient, bot TelegramSender, startupMsg, shutdownMsg string) <-chan struct{} {
+func StartAlarmStream(ctx context.Context, client pb.MonitorServiceClient, bot TelegramSender, startupMsg string, shutdownMsg func() string) <-chan struct{} {
 	listQueue := queue.NewListQueue[QueueItem]()
 
 	// 1. ЗАГРУЗКА ИЗ ФАЙЛА (при старте)
@@ -182,10 +182,13 @@ func StartAlarmStream(ctx context.Context, client pb.MonitorServiceClient, bot T
 		<-ctx.Done()
 
 		// 4.1. СООБЩЕНИЕ О ВЫГРУЗКЕ БОТА (перед сохранением очереди)
-		if shutdownMsg != "" {
-			if err := sendTextMessage(bot, ChatID, shutdownMsg); err != nil {
-				log.Printf("⚠️ Failed to send shutdown message, queuing: %v", err)
-				listQueue.Push(QueueItem{ChatID: ChatID, Text: shutdownMsg, ParseMode: "Markdown"})
+		if shutdownMsg != nil {
+			msg := shutdownMsg()
+			if msg != "" {
+				if err := sendTextMessage(bot, ChatID, msg); err != nil {
+					log.Printf("⚠️ Failed to send shutdown message, queuing: %v", err)
+					listQueue.Push(QueueItem{ChatID: ChatID, Text: msg, ParseMode: "Markdown"})
+				}
 			}
 		}
 
