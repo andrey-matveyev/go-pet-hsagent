@@ -55,16 +55,17 @@ func (m *MockSystemRunner) RunCmdWithContext(ctx context.Context, name string, a
 // setupTestServer создаёт сервер с тестовой конфигурацией и переданным моком.
 func setupTestServer(mock *MockSystemRunner) *server {
 	cfg := &config{}
-	cfg.Monitoring.BatteryIntervalMin = 1
-	cfg.Monitoring.CpuIntervalMin = 1
-	cfg.Monitoring.CpuTempThreshold = 70.0
-	cfg.Monitoring.DiskIntervalMin = 1
-	cfg.Monitoring.DiskMinFreePercent = 10.0
+	cfg.Listener.ListenAddress = "0.0.0.0:50051"
+	cfg.Monitoring.Battery = 1
+	cfg.Monitoring.Cpu = 1
+	cfg.Limits.CpuMaxTemperature = 70.0
+	cfg.Monitoring.Disk = 1
+	cfg.Limits.DiskMinFreePercent = 10.0
 
-	cfg.Backup.UUID = "test-uuid-1234"
-	cfg.Backup.SourceDir = "/tmp/source"
-	cfg.Backup.MountPoint = "/tmp/target"
-	cfg.Backup.XhciPCI = "0000:00:14.0"
+	cfg.Backup.TargetFilesystemUUID = "test-uuid-1234"
+	cfg.Backup.SourceDirectory = "/tmp/source"
+	cfg.Backup.TargetMountPoint = "/tmp/target"
+	cfg.Backup.TargetXhciPCI = "0000:00:14.0"
 	cfg.Backup.ScheduleTime = "03:00"
 
 	return &server{

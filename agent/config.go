@@ -1,21 +1,25 @@
 package main
 
 type config struct {
-	ListenAddress string `toml:"listen_address"`
-	Backup        struct {
-		UUID            string `toml:"uuid"`
-		SourceDir       string `toml:"source_dir"`
-		MountPoint      string `toml:"mount_point"`
-		XhciPCI         string `toml:"xhci_pci"`
-		ScheduleWeekday string `toml:"schedule_weekday"`
-		ScheduleTime    string `toml:"schedule_time"`
+	Listener struct {
+		ListenAddress string `toml:"listen_address"`
+	} `toml:"listener"`
+	Backup struct {
+		TargetFilesystemUUID string `toml:"target_filesystem_uuid"`
+		SourceDirectory      string `toml:"source_directory"`
+		TargetMountPoint     string `toml:"target_mount_point"`
+		TargetXhciPCI        string `toml:"target_xhci_pci"`
+		ScheduleWeekday      string `toml:"schedule_weekday"`
+		ScheduleTime         string `toml:"schedule_time"`
 	} `toml:"backup"`
 	Monitoring struct {
-		BatteryIntervalMin int     `toml:"battery_interval_min"`
-		CpuIntervalMin     int     `toml:"cpu_interval_min"`
-		DiskIntervalMin    int     `toml:"disk_interval_min"`
-		RebootIntervalMin  int     `toml:"reboot_interval_min"`
-		CpuTempThreshold   float64 `toml:"cpu_temp_threshold"`
-		DiskMinFreePercent float64 `toml:"disk_min_free_percent"`
+		Battery    int     `toml:"battery"`
+		Cpu        int     `toml:"cpu"`
+		Disk       int     `toml:"disk"`
+		NeedReboot int     `toml:"need_reboot"`
 	} `toml:"monitoring"`
+	Limits struct {
+		CpuMaxTemperature   float64 `toml:"cpu_max_temperature"`
+		DiskMinFreePercent  float64 `toml:"disk_min_free_percent"`
+	} `toml:"limits"`
 }

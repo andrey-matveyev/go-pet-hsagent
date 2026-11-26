@@ -65,7 +65,7 @@ func TestCpuMonitoring_OverheatAndHysteresis(t *testing.T) {
 	temp, _ = srv.getCpuTemperature()
 
 	srv.mu.Lock()
-	if temp > srv.cfg.Monitoring.CpuTempThreshold && !srv.cpuAlerted {
+	if temp > srv.cfg.Limits.CpuMaxTemperature && !srv.cpuAlerted {
 		srv.eventChan <- &pb.StreamEventsResponse{Type: "cpu", Message: "CPU overheating! Temperature: 75.0°C (Threshold: 70.0°C)"}
 		srv.cpuAlerted = true
 	}
@@ -85,7 +85,7 @@ func TestCpuMonitoring_OverheatAndHysteresis(t *testing.T) {
 	temp, _ = srv.getCpuTemperature()
 
 	srv.mu.Lock()
-	if srv.cpuAlerted && temp < srv.cfg.Monitoring.CpuTempThreshold-5.0 {
+	if srv.cpuAlerted && temp < srv.cfg.Limits.CpuMaxTemperature-5.0 {
 		t.Error("Alert cleared too early! Should wait for < 65.0°C")
 	}
 	srv.mu.Unlock()
@@ -95,7 +95,7 @@ func TestCpuMonitoring_OverheatAndHysteresis(t *testing.T) {
 	temp, _ = srv.getCpuTemperature()
 
 	srv.mu.Lock()
-	if srv.cpuAlerted && temp < srv.cfg.Monitoring.CpuTempThreshold-5.0 {
+	if srv.cpuAlerted && temp < srv.cfg.Limits.CpuMaxTemperature-5.0 {
 		srv.eventChan <- &pb.StreamEventsResponse{Type: "cpu", Message: "CPU temperature normal: 62.0°C"}
 		srv.cpuAlerted = false
 	}

@@ -30,7 +30,7 @@ func (s *server) GetSystemStatus(ctx context.Context, in *pb.GetSystemStatusRequ
 	bCap, bStat, _ := s.getBatteryInfo()
 	cpuTemp, _ := s.getCpuTemperature()
 	sysDisk, _ := s.getDiskStat("/")
-	storageDisk, _ := s.getDiskStat(s.cfg.Backup.SourceDir)
+	storageDisk, _ := s.getDiskStat(s.cfg.Backup.SourceDirectory)
 
 	disks := []*pb.DiskUsage{}
 	if sysDisk != nil {
@@ -43,7 +43,7 @@ func (s *server) GetSystemStatus(ctx context.Context, in *pb.GetSystemStatusRequ
 	}
 	if storageDisk != nil {
 		disks = append(disks, &pb.DiskUsage{
-			Name:     getDiskType(s.cfg.Backup.SourceDir),
+			Name:     getDiskType(s.cfg.Backup.SourceDirectory),
 			UsedGb:   storageDisk.UsedGB,
 			TotalGb:  storageDisk.TotalGB,
 			UsagePct: storageDisk.UsagePct,

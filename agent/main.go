@@ -34,7 +34,7 @@ func main() {
 		log.Fatalf("❌ Критическая ошибка: не удалось прочитать config.toml: %v", err)
 	}
 
-	lis, err := net.Listen("tcp", cfg.ListenAddress)
+	lis, err := net.Listen("tcp", cfg.Listener.ListenAddress)
 	if err != nil {
 		log.Fatalf("failed to listen: %v", err)
 	}
@@ -55,7 +55,7 @@ func main() {
 		// и включить питание порта, прежде чем мы его отключим.
 		time.Sleep(1 * time.Minute)
 
-		pciAddr := strings.TrimSpace(srv.cfg.Backup.XhciPCI)
+		pciAddr := strings.TrimSpace(srv.cfg.Backup.TargetXhciPCI)
 		if pciAddr != "" {
 			var lastErr error
 			var lastOut string
@@ -74,7 +74,7 @@ func main() {
 				log.Printf("❌ Не удалось отключить USB порт бэкапа (PCI %s) после 3 попыток: %v, output: %s", pciAddr, lastErr, lastOut)
 			}
 		} else {
-			log.Println("⚠️ backup.xhci_pci не задан в конфиге — пропускаем отключение USB порта бэкапа.")
+			log.Println("⚠️ backup.target_xhci_pci не задан в конфиге — пропускаем отключение USB порта бэкапа.")
 		}
 
 		out, err := srv.setXHCIBind(pciAddr, false, context.Background())
@@ -86,11 +86,11 @@ func main() {
 	gCtx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
 	defer cancel()
 
-	if _, err := srv.setXHCIBind(srv.cfg.Backup.XhciPCI, false, gCtx); err != nil {
-		log.Printf("⚠️ Не удалось отключить USB порт бэкапа (PCI %s): %v", srv.cfg.Backup.XhciPCI, err)
+	if _, err := srv.setXHCIBind(srv.cfg.Backup.TargetXhciPCI, false, gCtx); err != nil {
+		log.Printf("⚠️ Не удалось отключить USB порт бэкапа (PCI %s): %v", srv.cfg.Backup.TargetXhciPCI, err)
 		log.Printf("Config: %+v", srv.cfg)
 	} else {
-		log.Printf("✅ USB порт бэкапа (PCI %s) отключён. Останется выключенным до повторного включения.", srv.cfg.Backup.XhciPCI)
+		log.Printf("✅ USB порт бэкапа (PCI %s) отключён. Останется выключенным до повторного включения.", srv.cfg.Backup.TargetXhciPCI)
 	}
 
 	go srv.monitorBatteryLoop()
@@ -98,7 +98,7 @@ func main() {
 	go srv.monitorDisksLoop()
 	go srv.monitorRebootLoop()
 	go srv.startSchedulerLoop()
-	log.Printf("🚀 Системный gRPC Агент успешно запущен на %s", cfg.ListenAddress)
+	log.Printf("🚀 Системный gRPC Агент успешно запущен на %s", cfg.Listener.ListenAddress)
 
 	if err := s.Serve(lis); err != nil {
 		log.Fatalf("failed to serve: %v", err)

@@ -71,7 +71,7 @@ func (s *server) getDiskStat(path string) (*DiskStat, error) {
 
 func (s *server) monitorBatteryLoop() {
 	for {
-		interval := time.Duration(s.cfg.Monitoring.BatteryIntervalMin) * time.Minute
+		interval := time.Duration(s.cfg.Monitoring.Battery) * time.Minute
 		if interval <= 0 {
 			interval = 5 * time.Minute
 		}
@@ -108,7 +108,7 @@ func (s *server) monitorBatteryLoop() {
 
 func (s *server) monitorCpuLoop() {
 	for {
-		interval := time.Duration(s.cfg.Monitoring.CpuIntervalMin) * time.Minute
+		interval := time.Duration(s.cfg.Monitoring.Cpu) * time.Minute
 		if interval <= 0 {
 			interval = 2 * time.Minute
 		}
@@ -116,16 +116,16 @@ func (s *server) monitorCpuLoop() {
 		temp, err := s.getCpuTemperature()
 		if err == nil {
 			s.mu.Lock()
-			if temp > s.cfg.Monitoring.CpuTempThreshold {
+			if temp > s.cfg.Limits.CpuMaxTemperature {
 				if !s.cpuAlerted {
 					s.eventChan <- &pb.StreamEventsResponse{
 						Type:    "cpu",
-						Message: fmt.Sprintf("CPU overheating! Temperature: %.1f°C (Threshold: %.1f°C)", temp, s.cfg.Monitoring.CpuTempThreshold),
+						Message: fmt.Sprintf("CPU overheating! Temperature: %.1f°C (Threshold: %.1f°C)", temp, s.cfg.Limits.CpuMaxTemperature),
 					}
 					s.cpuAlerted = true
 				}
 			} else {
-				if s.cpuAlerted && temp < s.cfg.Monitoring.CpuTempThreshold-5.0 {
+				if s.cpuAlerted && temp < s.cfg.Limits.CpuMaxTemperature-5.0 {
 					s.eventChan <- &pb.StreamEventsResponse{
 						Type:    "cpu",
 						Message: fmt.Sprintf("CPU temperature normal: %.1f°C", temp),
@@ -141,7 +141,7 @@ func (s *server) monitorCpuLoop() {
 
 func (s *server) monitorRebootLoop() {
 	for {
-		interval := time.Duration(s.cfg.Monitoring.RebootIntervalMin) * time.Minute
+		interval := time.Duration(s.cfg.Monitoring.NeedReboot) * time.Minute
 		if interval == 0 {
 			interval = time.Hour
 		}
@@ -172,14 +172,14 @@ func (s *server) monitorDisksLoop() {
 	}
 
 	for {
-		interval := time.Duration(s.cfg.Monitoring.DiskIntervalMin) * time.Minute
+		interval := time.Duration(s.cfg.Monitoring.Disk) * time.Minute
 		if interval <= 0 {
 			interval = 10 * time.Minute
 		}
 
 		paths := map[string]string{
 			"System SSD":      "/",
-			"Immich Storages": s.cfg.Backup.SourceDir,
+			"Immich Storages": s.cfg.Backup.SourceDirectory,
 		}
 
 		for name, path := range paths {
@@ -187,7 +187,7 @@ func (s *server) monitorDisksLoop() {
 			if err == nil {
 				s.mu.Lock()
 				isAlerted := s.diskAlerted[name]
-				if disk.FreePct < s.cfg.Monitoring.DiskMinFreePercent {
+				if disk.FreePct < s.cfg.Limits.DiskMinFreePercent {
 					if !isAlerted {
 						s.eventChan <- &pb.StreamEventsResponse{
 							Type:    "disk",
@@ -196,7 +196,7 @@ func (s *server) monitorDisksLoop() {
 						s.diskAlerted[name] = true
 					}
 				} else {
-					if isAlerted && disk.FreePct > s.cfg.Monitoring.DiskMinFreePercent+5.0 {
+					if isAlerted && disk.FreePct > s.cfg.Limits.DiskMinFreePercent+5.0 {
 						s.eventChan <- &pb.StreamEventsResponse{
 							Type:    "disk",
 							Message: fmt.Sprintf("Disk space [%s] restored: %.1f%% free", name, disk.FreePct),
