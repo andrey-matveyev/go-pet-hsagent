@@ -5,8 +5,8 @@ type config struct {
 		ListenAddress string `toml:"listen_address"`
 	} `toml:"listener"`
 	Backup struct {
-		TargetFilesystemUUID string `toml:"target_filesystem_uuid"`
 		SourceDirectory      string `toml:"source_directory"`
+		TargetFilesystemUUID string `toml:"target_filesystem_uuid"`
 		TargetMountPoint     string `toml:"target_mount_point"`
 		TargetXhciPCI        string `toml:"target_xhci_pci"`
 		ScheduleWeekday      string `toml:"schedule_weekday"`
