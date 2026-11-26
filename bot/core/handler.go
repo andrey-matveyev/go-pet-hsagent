@@ -446,7 +446,7 @@ func HandleCommand(parentCtx context.Context, client pb.MonitorServiceClient, bo
 			}
 
 			text = fmt.Sprintf("%s Server Status::\n%s\n%s\n%s\n\nCPU Usage:\n%s\n%s\n\nMemory Usage:\n%s\n%s\n\nDisk Usage:\n%s\n\n%s",
-					res.ServerModel, uptimeLine, batteryLine, rebootLine, cpuLine, coresLine, ramLine, swapLine, strings.Join(diskLines, "\n"), res.Timestamp)
+				res.ServerModel, uptimeLine, batteryLine, rebootLine, cpuLine, coresLine, ramLine, swapLine, strings.Join(diskLines, "\n"), res.Timestamp)
 		}
 	case "test":
 		res, err := client.TestSystems(reqCtx, &pb.TestSystemsRequest{})

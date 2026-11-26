@@ -48,47 +48,12 @@ func main() {
 		sysRunner:   &DefaultSystemRunner{}, // Передаем дефолтную реализацию
 	}
 	pb.RegisterMonitorServiceServer(s, srv)
-	/*
-		// Отключаем USB-порт бэкапа при старте агента (в т.ч. после перезагрузки ОС),
-		// чтобы он оставался выключенным. Остальные USB-порты не затрагиваются.
-		// Делаем задержку, чтобы система успела инициализировать USB-стек
-		// и включить питание порта, прежде чем мы его отключим.
-		time.Sleep(1 * time.Minute)
 
-		pciAddr := strings.TrimSpace(srv.cfg.Backup.TargetXhciPCI)
-		if pciAddr != "" {
-			var lastErr error
-			var lastOut string
-			for i := 0; i < 3; i++ {
-				out, err := srv.setXHCIBind(pciAddr, false, context.Background())
-				if err == nil {
-					log.Printf("✅ USB порт бэкапа (PCI %s) отключён. Останется выключенным до повторного включения.", pciAddr)
-					break
-				}
-				lastErr = err
-				lastOut = out
-				log.Printf("⚠️ Попытка %d/3 отключить USB порт бэкапа (PCI %s): %v, output: %s", i+1, pciAddr, err, out)
-				time.Sleep(1 * time.Second)
-			}
-			if lastErr != nil {
-				log.Printf("❌ Не удалось отключить USB порт бэкапа (PCI %s) после 3 попыток: %v, output: %s", pciAddr, lastErr, lastOut)
-			}
-		} else {
-			log.Println("⚠️ backup.target_xhci_pci не задан в конфиге — пропускаем отключение USB порта бэкапа.")
-		}
-
-		out, err := srv.setXHCIBind(pciAddr, false, context.Background())
-		if err == nil {
-			log.Printf("✅ USB порт бэкапа (PCI %s) отключён. Останется выключенным до повторного включения.", pciAddr)
-			break
-		}
-	*/
 	gCtx, cancel := context.WithTimeout(context.Background(), 1*time.Minute)
 	defer cancel()
 
 	if _, err := srv.setXHCIBind(srv.cfg.Backup.TargetXhciPCI, false, gCtx); err != nil {
 		log.Printf("⚠️ Не удалось отключить USB порт бэкапа (PCI %s): %v", srv.cfg.Backup.TargetXhciPCI, err)
-		log.Printf("Config: %+v", srv.cfg)
 	} else {
 		log.Printf("✅ USB порт бэкапа (PCI %s) отключён. Останется выключенным до повторного включения.", srv.cfg.Backup.TargetXhciPCI)
 	}
