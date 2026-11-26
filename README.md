@@ -1,12 +1,12 @@
 # Go-Pet-HSAgent
 
-Система мониторинга домашнего сервера с Telegram-ботом. Агент собирает системные метрики (батарея, температура CPU, загрузка ядер, RAM, swap, диски, uptime), а бот позволяет получать статус и управлять сервером через команды Telegram. Связь между ботом и агентом осуществляется по gRPC.
+Home server monitoring system with a Telegram bot. The agent collects system metrics (battery, CPU temperature, core usage, RAM, swap, disks, uptime), and the bot lets you check status and control the server via Telegram commands. Communication between the bot and the agent is handled by gRPC.
 
-## Как это работает (примеры сообщений в Telegram)
+## How it works (Telegram message examples)
 
-Ниже приведены примеры того, как выглядит взаимодействие с ботом в Telegram. Эмодзи в сообщениях не используются — только текст, цифры и временные метки.
+Below are examples of how interacting with the bot looks in Telegram. Emojis are not used in messages — only text, numbers, and timestamps.
 
-**Команда /status**
+**Command /status**
 ```
 Server Status:
 Model: HP ProLiant DL360 Gen10
@@ -28,109 +28,109 @@ Disk Usage:
 2024-01-15T08:30:00Z
 ```
 
-**Команда /test**
+**Command /test**
 ```
 Self-test completed: all systems OK.
 2024-01-15T08:31:10Z
 ```
 
-**Команда /backup**
+**Command /backup**
 ```
 Backup completed successfully.
 2024-01-15T08:32:05Z
 ```
 
-**Команда /reboot** (требует подтверждения)
+**Command /reboot** (requires confirmation)
 ```
 Are you sure you want to reboot the server?
-[Да] [Нет]
+[Yes] [No]
 ```
-После нажатия «Да»:
+After pressing "Yes":
 ```
 Server reboot initiated (in 1 minute).
 2024-01-15T08:35:00Z
 ```
 
-**Автоматическое уведомление от агента**
+**Automatic notification from the agent**
 ```
 ALERT: CPU temperature exceeded threshold (92.1°C > 85.0°C).
 2024-01-15T09:10:00Z
 ```
 
-## Возможности
+## Features
 
-- Мониторинг батареи, температуры CPU, загрузки ядер, RAM, swap, дисков и uptime
-- gRPC-сервер в агенте и gRPC-клиент в боте
-- Поток событий в реальном времени (push-уведомления об алертах)
-- Дисковая очередь уведомлений: сообщения не теряются при перезапуске бота
-- Подтверждение перезагрузки сервера через инлайн-кнопки
-- Агент запускается как systemd-сервис на Ubuntu
-- Бот разворачивается в Docker (включая CasaOS)
+- Monitoring of battery, CPU temperature, core load, RAM, swap, disks, and uptime
+- gRPC server in the agent and gRPC client in the bot
+- Real-time event stream (push notifications for alerts)
+- Disk-backed notification queue: messages are not lost on bot restart
+- Server reboot confirmation via inline buttons
+- Agent runs as a systemd service on Ubuntu
+- Bot runs in Docker (including CasaOS)
 
-## Архитектура
+## Architecture
 
-Два компонента взаимодействуют через gRPC по протоколу, определённому в `proto/hsagent/v1/hsagent.proto`.
+Two components interact via gRPC using the protocol defined in `proto/hsagent/v1/hsagent.proto`.
 
-- **Agent** (`agent/`) — фоновый сервис на Ubuntu, собирает метрики, хранит конфигурацию в `agent/config.toml`, предоставляет gRPC API.
-- **Telegram Bot** (`bot/`) — пользовательский интерфейс, обрабатывает команды Telegram, вызывает gRPC-методы агента, ведёт постоянный поток событий.
+- **Agent** (`agent/`) — background service on Ubuntu, collects metrics, stores configuration in `agent/config.toml`, exposes gRPC API.
+- **Telegram Bot** (`bot/`) — user interface, handles Telegram commands, calls agent gRPC methods, maintains a persistent event stream.
 
-Подробная архитектура: [`.dev/docs/architecture.md`](.dev/docs/architecture.md)
+Full architecture: [`.dev/docs/architecture.md`](.dev/docs/architecture.md)
 
-## Быстрый старт
+## Quick Start
 
-### Требования
+### Requirements
 - Go 1.21+
-- Docker и Docker Compose (для бота)
-- Токен и Chat ID Telegram-бота
+- Docker and Docker Compose (for the bot)
+- Telegram bot token and Chat ID
 
-### Сборка
+### Build
 ```bash
-# Агент
+# Agent
 ./.dev/cmd/build_agent.sh
 
-# Бот (локальный бинарник)
+# Bot (local binary)
 ./.dev/cmd/build_bot.sh
 
-# Бот (Docker-образ)
+# Bot (Docker image)
 ./.dev/cmd/build_bot_docker.sh
 ```
 
-### Конфигурация
-- Агент: `agent/config.toml` — адрес gRPC, параметры мониторинга, пути к бэкапу.
-- Бот: скопируйте `bot/.env.template` в `bot/.env` и укажите `TG_TOKEN` и `TG_CHAT_ID`.
+### Configuration
+- Agent: `agent/config.toml` — gRPC address, monitoring parameters, backup paths.
+- Bot: copy `bot/.env.template` to `bot/.env` and set `TG_TOKEN` and `TG_CHAT_ID`.
 
-## Развертывание
+## Deployment
 
-| Компонент | Окружение | Инструкция |
-|-----------|-----------|------------|
+| Component | Environment | Instructions |
+|-----------|-------------|--------------|
 | Agent | Ubuntu, systemd | [`.dev/docs/deploy_agent.md`](.dev/docs/deploy_agent.md) |
 | Bot | Docker, CasaOS | [`.dev/docs/deploy_bot.md`](.dev/docs/deploy_bot.md) |
 
-## Команды Telegram-бота
+## Telegram Bot Commands
 
-| Команда | Описание |
-|---------|----------|
-| `/status` | Текущее состояние сервера (батарея, CPU, RAM, диск, uptime) |
-| `/test` | Принудительная самодиагностика системы |
-| `/backup` | Запуск бэкапа хранилища |
-| `/reboot` | Перезагрузка сервера (требует подтверждения кнопками) |
-| `/help` | Список поддерживаемых команд |
+| Command | Description |
+|---------|-------------|
+| `/status` | Current server state (battery, CPU, RAM, disk, uptime) |
+| `/test` | Forced system self-test |
+| `/backup` | Trigger storage backup |
+| `/reboot` | Reboot the server (requires confirmation via buttons) |
+| `/help` | List of supported commands |
 
-## Структура проекта
+## Project Structure
 
 ```
-agent/        # Агент мониторинга (systemd-сервис)
-bot/          # Telegram-бот (gRPC-клиент)
-proto/        # Protobuf-определение gRPC-сервиса
-e2e_test/     # Интеграционные тесты
-.dev/cmd/     # Скрипты сборки и деплоя
-.dev/docs/    # Документация (архитектура, деплой, workflow)
+agent/        # Monitoring agent (systemd service)
+bot/          # Telegram bot (gRPC client)
+proto/        # Protobuf gRPC service definition
+e2e_test/     # Integration tests
+.dev/cmd/     # Build and deploy scripts
+.dev/docs/    # Documentation (architecture, deploy, workflow)
 ```
 
-## Документация
+## Documentation
 
-- [Архитектура системы](.dev/docs/architecture.md)
-- [Деплой агента (systemd/Ubuntu)](.dev/docs/deploy_agent.md)
-- [Деплой бота (Docker/CasaOS)](.dev/docs/deploy_bot.md)
-- [Workflow разработки](.dev/docs/workflow.md)
-- Пример использования / установка в CasaOS (со скриншотами) — см. раздел «Как это работает» выше.
+- [System architecture](.dev/docs/architecture.md)
+- [Agent deployment (systemd/Ubuntu)](.dev/docs/deploy_agent.md)
+- [Bot deployment (Docker/CasaOS)](.dev/docs/deploy_bot.md)
+- [Development workflow](.dev/docs/workflow.md)
+- Example usage / CasaOS installation (with screenshots) — see the "How it works" section above.
