@@ -77,9 +77,77 @@ To create a PR using the same $TOKEN, use curl:
     -d '{"title":"PR Title","head":"<head_branch>","base":"<base_branch>","body":"Description"}'
 ```
 
-#### 3.2.1 Pull Requests Rules
+#### 3.2.1 Pull Request Rules
 - **Never** commit directly to the main branch.
 - **Never** merge branches yourself.
 - **Always** submit the final result as a Pull Request (PR) on GitHub.
 - If the task is based on a GitHub issue, include a link to the issue in the PR body (e.g., 'Closes #123').
 - After the PR is merged, the local task branch can be deleted.
+
+### 3.3 Create GitHub Issues (via API)
+To create issues (including epics with sub-tasks) using the GitHub App token:
+
+#### 3.3.1 Get Installation Access Token
+Use the provided token script (generates JWT → gets installation ID → gets access token):
+```bash
+  TOKEN=$(python3 .dev/tmp/get_github_token.py)
+```
+
+#### 3.3.2 Create an Issue (Epic or Task)
+```bash
+  curl -X POST \
+    -H "Authorization: Bearer $TOKEN" \
+    -H "Accept: application/vnd.github+json" \
+    https://api.github.com/repos/<owner>/<repo>/issues \
+    -d '{"title":"Issue Title","body":"Markdown body with **bold**, code `snippets`, and lists.","labels":["label1","label2"]}'
+```
+
+**Important notes:**
+- The GitHub App must have `Contents: Read`, `Issues: Write`, `Metadata: Read` permissions
+- `OWNER` and `REPO` are hardcoded in `.dev/tmp/get_github_token.py` (update if repo moves)
+- Labels must exist in the repo (create via UI first or they'll be ignored)
+- Body supports full GitHub Flavored Markdown
+
+#### 3.3.3 Create Sub-Issues (Link to Parent Epic)
+Sub-issues API is in beta. Two approaches:
+
+**Approach A: REST API (one-by-one, requires preview header)**
+```bash
+  # Link existing issue #42 as sub-issue of epic #40
+  curl -X POST \
+    -H "Authorization: Bearer $TOKEN" \
+    -H "Accept: application/vnd.github+json" \
+    -H "X-GitHub-Api-Version: 2022-11-28" \
+    https://api.github.com/repos/<owner>/<repo>/issues/40/sub_issues \
+    -d '{"sub_issue_id": 42}'
+```
+
+**Approach B: GraphQL (batch, if available)**
+```bash
+  # First get node IDs via REST
+  PARENT_ID=$(curl -s -H "Authorization: Bearer $TOKEN" https://api.github.com/repos/<owner>/<repo>/issues/40 | jq -r .node_id)
+  SUB_ID=$(curl -s -H "Authorization: Bearer $TOKEN" https://api.github.com/repos/<owner>/<repo>/issues/42 | jq -r .node_id)
+  
+  # Then use GraphQL mutation (name may vary by API version)
+  curl -X POST \
+    -H "Authorization: Bearer $TOKEN" \
+    -H "Accept: application/vnd.github+json" \
+    https://api.github.com/graphql \
+    -d '{"query":"mutation($parentId: ID!, $subIssueIds: [ID!]!) { addSubIssues(input: {parentId: $parentId, subIssueIds: $subIssueIds}) { parentIssue { id } } }","variables":{"parentId":"'$PARENT_ID'","subIssueIds":["'$SUB_ID'"]}}'
+```
+
+**Known limitations (as of 2024):**
+- GitHub App may lack permission for sub-issues API (403 "Resource not accessible by integration")
+- `addSubIssues` mutation may not exist in current GraphQL schema
+- **Workaround:** Create issues with `Parent Epic: #N` in body, link manually in GitHub UI
+
+#### 3.3.4 Example: Batch Create Issues from Script
+See `.dev/tmp/create_subissues.py` for a complete Python example that:
+1. Generates JWT from GitHub App private key
+2. Gets installation access token
+3. Creates multiple issues via REST API
+4. Attempts to link as sub-issues via GraphQL
+
+```bash
+  python3 .dev/tmp/create_subissues.py
+```
