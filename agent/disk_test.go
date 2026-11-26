@@ -14,7 +14,7 @@ func TestDiskMonitoring_LowDiskSpace(t *testing.T) {
 	srv := setupTestServer(mock)
 
 	// Устанавливаем очень высокий порог, чтобы гарантированно сработал алерт на любом реальном диске
-	srv.cfg.Monitoring.DiskMinFreePercent = 99.9
+	srv.cfg.Limits.DiskMinFreePercent = 99.9
 
 	disk, err := srv.getDiskStat("/tmp")
 	if err != nil {
@@ -22,7 +22,7 @@ func TestDiskMonitoring_LowDiskSpace(t *testing.T) {
 	}
 
 	// Имитируем логику monitorDisksLoop для низкого места
-	if disk.FreePct < srv.cfg.Monitoring.DiskMinFreePercent {
+	if disk.FreePct < srv.cfg.Limits.DiskMinFreePercent {
 		srv.eventChan <- &pb.StreamEventsResponse{
 			Type:    "disk",
 			Message: fmt.Sprintf("Low disk space on [%s] (%s): %.1f%% free", "System SSD", "/tmp", disk.FreePct),
@@ -50,7 +50,7 @@ func TestDiskMonitoring_DiskRestored(t *testing.T) {
 	}
 
 	// Имитируем логику восстановления: был алерт, теперь место свободно (с запасом 5%)
-	if disk.FreePct > srv.cfg.Monitoring.DiskMinFreePercent+5.0 {
+	if disk.FreePct > srv.cfg.Limits.DiskMinFreePercent+5.0 {
 		srv.eventChan <- &pb.StreamEventsResponse{
 			Type:    "disk",
 			Message: fmt.Sprintf("Disk space [%s] restored: %.1f%% free", "System SSD", disk.FreePct),
