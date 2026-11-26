@@ -1,4 +1,4 @@
-# Go-Pet-HSAgent
+# HomeServerAgent
 
 Home server monitoring system with a Telegram bot. The agent collects system metrics (battery, CPU temperature, core usage, RAM, swap, disks, uptime), and the bot lets you check status and control the server via Telegram commands. Communication between the bot and the agent is handled by gRPC.
 
